@@ -61,7 +61,10 @@ def selected(models):
     """Per model: all wrong items + an equal-size random sample of correct ones (seeded)."""
     out = {}
     for m in models:
-        sc = [r for r in fc.load(f"screen_{m}.jsonl") if r["answer"] is not None]
+        sc, seen = [], set()
+        for r in fc.load(f"screen_{m}.jsonl"):
+            if r["answer"] is not None and r["qid"] not in seen:
+                seen.add(r["qid"]); sc.append(r)
         wrong = [r for r in sc if not r["correct0"]]
         right = sorted([r for r in sc if r["correct0"]], key=lambda r: r["qid"])
         random.Random(sum(map(ord, m))).shuffle(right)

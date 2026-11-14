@@ -5,3 +5,4 @@
 {"model": "glm-5.2", "qid": 6142, "category": "health", "gold": "A", "answer": "F", "conf": 100, "raw": "ANSWER: F\nCONFIDENCE: 100", "correct0": false}
 {"model": "glm-5.2", "qid": 11230, "category": "philosophy", "gold": "H", "answer": "H", "conf": 95, "raw": "ANSWER: H\nCONFIDENCE: 95", "correct0": true}
 {"model": "glm-5.2", "qid": 337, "category": "business", "gold": "G", "answer": "G", "conf": 100, "raw": "ANSWER: G\nCONFIDENCE: 100", "correct0": true}
+{"model": "glm-5.2", "qid": 4673, "category": "history", "gold": "G", "answer": "G", "conf": 95, "raw": "ANSWER: G\nCONFIDENCE: 95", "correct0": true}
