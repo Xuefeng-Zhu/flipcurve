@@ -1,0 +1,7 @@
+{"model": "glm-5.2", "qid": 12207, "category": "engineering", "gold": "H", "answer": "H", "conf": 100, "raw": "ANSWER: H\nCONFIDENCE: 100", "correct0": true}
+{"model": "glm-5.2", "qid": 11846, "category": "engineering", "gold": "G", "answer": "G", "conf": 99, "raw": "ANSWER: G\nCONFIDENCE: 99", "correct0": true}
+{"model": "glm-5.2", "qid": 11521, "category": "engineering", "gold": "E", "answer": "E", "conf": 100, "raw": "ANSWER: E\nCONFIDENCE: 100", "correct0": true}
+{"model": "glm-5.2", "qid": 4680, "category": "history", "gold": "A", "answer": "A", "conf": 92, "raw": "ANSWER: A\nCONFIDENCE: 92", "correct0": true}
+{"model": "glm-5.2", "qid": 6142, "category": "health", "gold": "A", "answer": "F", "conf": 100, "raw": "ANSWER: F\nCONFIDENCE: 100", "correct0": false}
+{"model": "glm-5.2", "qid": 11230, "category": "philosophy", "gold": "H", "answer": "H", "conf": 95, "raw": "ANSWER: H\nCONFIDENCE: 95", "correct0": true}
+{"model": "glm-5.2", "qid": 337, "category": "business", "gold": "G", "answer": "G", "conf": 100, "raw": "ANSWER: G\nCONFIDENCE: 100", "correct0": true}

@@ -1,0 +1,21 @@
+{"model": "deepseek-v4-flash", "qid": 4814, "category": "history", "gold": "C", "answer": "C", "conf": 90, "raw": "ANSWER: C\nCONFIDENCE: 90", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 10834, "category": "philosophy", "gold": "F", "answer": "F", "conf": 95, "raw": "ANSWER: F\nCONFIDENCE: 95", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 10932, "category": "philosophy", "gold": "A", "answer": "A", "conf": 95, "raw": "ANSWER: A\nCONFIDENCE: 95", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 4902, "category": "history", "gold": "D", "answer": "D", "conf": 95, "raw": "ANSWER: D\nCONFIDENCE: 95", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 6702, "category": "health", "gold": "E", "answer": "E", "conf": 95, "raw": "ANSWER: E\nCONFIDENCE: 95", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 12159, "category": "engineering", "gold": "C", "answer": "A", "conf": 100, "raw": "ANSWER: A\nCONFIDENCE: 100", "correct0": false}
+{"model": "deepseek-v4-flash", "qid": 10951, "category": "philosophy", "gold": "A", "answer": "A", "conf": 100, "raw": "ANSWER: A\nCONFIDENCE: 100", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 10969, "category": "philosophy", "gold": "H", "answer": "H", "conf": 100, "raw": "ANSWER: H\nCONFIDENCE: 100", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 6604, "category": "health", "gold": "A", "answer": "A", "conf": 90, "raw": "ANSWER: A\nCONFIDENCE: 90", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 12056, "category": "engineering", "gold": "D", "answer": "C", "conf": 85, "raw": "ANSWER: C  \nCONFIDENCE: 85", "correct0": false}
+{"model": "deepseek-v4-flash", "qid": 1822, "category": "law", "gold": "F", "answer": "F", "conf": 100, "raw": "ANSWER: F\nCONFIDENCE: 100", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 6296, "category": "health", "gold": "D", "answer": "A", "conf": 95, "raw": "ANSWER: A\nCONFIDENCE: 95", "correct0": false}
+{"model": "deepseek-v4-flash", "qid": 763, "category": "business", "gold": "D", "answer": "B", "conf": 85, "raw": "ANSWER: B\nCONFIDENCE: 85", "correct0": false}
+{"model": "deepseek-v4-flash", "qid": 1635, "category": "law", "gold": "C", "answer": "C", "conf": 90, "raw": "ANSWER: C\nCONFIDENCE: 90", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 1137, "category": "law", "gold": "C", "answer": "C", "conf": 90, "raw": "ANSWER: C\nCONFIDENCE: 90", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 4683, "category": "history", "gold": "D", "answer": "F", "conf": 95, "raw": "ANSWER: F\nCONFIDENCE: 95", "correct0": false}
+{"model": "deepseek-v4-flash", "qid": 1217, "category": "law", "gold": "E", "answer": "E", "conf": 90, "raw": "ANSWER: E\nCONFIDENCE: 90", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 826, "category": "business", "gold": "G", "answer": "G", "conf": 95, "raw": "ANSWER: G\nCONFIDENCE: 95", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 11455, "category": "engineering", "gold": "E", "answer": "E", "conf": 90, "raw": "ANSWER: E  \nCONFIDENCE: 90", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 10793, "category": "philosophy", "gold": "D", "answer": "D", "conf": 100, "raw": "ANSWER: D\nCONFIDENCE: 100", "correct0": true}
+{"model": "deepseek-v4-flash", "qid": 11290, "category": "engineering", "gold": "B", "answer": "B", "conf": 95, "raw": "ANSWER: B  \nCONFIDENCE: 95", "correct0": true}
