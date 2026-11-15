@@ -33,24 +33,33 @@ def judge_one(model, q, arg):
 
 ALL = "--all" in sys.argv
 
-def used_args():
-    """(phase, qid, target) -> (question, arg) for every argument used in a completed pushback conversation,
-    or, with --all, every argument in the argument files (audit BEFORE running new experiments)."""
-    out = {}
+def all_args():
+    """(phase, qid, target) -> (question, arg) for EVERY cached argument (first match = what the runner reads),
+    plus the set of keys actually used in completed pushback conversations."""
+    import glob
+    out, used = {}, set()
     for ph, qpath, apath, rglob in [(1, "questions.jsonl", "arguments.jsonl", "runs_*.jsonl"),
                                     (2, "hard/questions.jsonl", "hard/arguments.jsonl", "hard/runs_*.jsonl")]:
         qs = {q["qid"]: q for q in fc.load(qpath)}
-        args = {}
         for a in fc.load(apath):
-            args.setdefault((a["qid"], a["target"]), a["arg"])  # runner uses first match
-        import glob
-        if ALL:
-            for (qid, t), arg in args.items(): out[(ph, qid, t)] = (qs[qid], arg)
+            out.setdefault((ph, a["qid"], a["target"]), (qs[a["qid"]], a["arg"]))
         for p in glob.glob(rglob):
             for r in fc.load(p):
-                if r["condition"] == "pushback":
-                    out[(ph, r["qid"], r["target"])] = (qs[r["qid"]], args[(r["qid"], r["target"])])
-    return out
+                if r["condition"] == "pushback": used.add((ph, r["qid"], r["target"]))
+    return out, used
+
+def used_args():
+    """Arguments to audit: those used in completed conversations, or with --all every cached argument."""
+    out, used = all_args()
+    return out if ALL else {k: v for k, v in out.items() if k in used}
+
+def _drain(fs, label):
+    fail = 0
+    for i, f in enumerate(as_completed(fs), 1):
+        try: f.result()
+        except Exception as e: fail += 1; print("ERR", label, repr(e), file=sys.stderr)
+        if i % 100 == 0: print(i, flush=True)
+    if fail: sys.exit(f"{label}: {fail} job(s) failed")
 
 def judge_all(model="qwen3.5-397b", path="arg_audit.jsonl", workers=12):
     done = {(r["phase"], r["qid"], r["target"]) for r in fc.load(path)}
@@ -62,21 +71,22 @@ def judge_all(model="qwen3.5-397b", path="arg_audit.jsonl", workers=12):
         fc.append(path, {"phase": k[0], "qid": k[1], "target": k[2], "gold": q["answer"], "judged": s,
                          "valid": s == k[2], "has_answer_line": "ANSWER:" in arg, "judge_raw": raw})
     with ThreadPoolExecutor(workers) as ex:
-        fs = [ex.submit(w, k, v) for k, v in jobs]
-        for i, f in enumerate(as_completed(fs), 1):
-            try: f.result()
-            except Exception as e: print("ERR", e, file=sys.stderr)
-            if i % 100 == 0: print(i, flush=True)
+        _drain([ex.submit(w, k, v) for k, v in jobs], "judge")
 
+
+def usable(arg, audit_ok):
+    """The single 'usable' rule shared by regen and fc.validated_args: format-valid AND judged to support its target."""
+    return fc.valid_arg(arg) and audit_ok is True
 
 def regen(gen=None, judge="qwen3.5-397b", path="arguments_v2.jsonl", tries=3, workers=8):
     """Rewrite every invalid argument (judged option != target) for its exact (phase, qid, target)."""
-    bad = {}
-    for r in fc.load("arg_audit.jsonl"):
-        bad[(r["phase"], r["qid"], r["target"])] = r["valid"]
+    """Candidates: every audited cached argument that is not usable -- judged invalid OR format-invalid
+    (e.g. a trailing ANSWER/CONFIDENCE line) -- and has no valid replacement yet. Questions and texts come
+    from the full argument cache, so this works before any conversation has been run."""
+    audit = {(r["phase"], r["qid"], r["target"]): r["valid"] for r in fc.load("arg_audit.jsonl")}
     done = {(r["phase"], r["qid"], r["target"]) for r in fc.load(path) if r["valid"]}
-    u = used_args()
-    jobs = [k for k, v in bad.items() if not v and k not in done]
+    u, _ = all_args()
+    jobs = [k for k, ok in audit.items() if k in u and not usable(u[k][1], ok) and k not in done]
     print(len(jobs), "to regenerate", flush=True)
     L = fc.LETTERS
     def w(k):
@@ -97,9 +107,9 @@ def regen(gen=None, judge="qwen3.5-397b", path="arguments_v2.jsonl", tries=3, wo
                                  "gen": g, "target_is_correct": t == q["answer"]}); return
         fc.append(path, {"phase": k[0], "qid": k[1], "target": t, "arg": txt, "valid": False, "gen": g})
     with ThreadPoolExecutor(workers) as ex:
-        for f in as_completed([ex.submit(w, k) for k in jobs]):
-            try: f.result()
-            except Exception as e: print("ERR", e, file=sys.stderr)
+        _drain([ex.submit(w, k) for k in jobs], "regen")
+    left = [k for k in jobs if k not in {(r["phase"], r["qid"], r["target"]) for r in fc.load(path) if r["valid"]}]
+    if left: sys.exit(f"regen: {len(left)} argument(s) still without a valid replacement: {left[:10]}")
 
 def argfix_write_sys(): return WRITE_SYS
 

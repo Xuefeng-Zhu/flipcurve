@@ -23,7 +23,7 @@ export ADAPTION_API_KEY=...
 # Phase 1 (from flipcurve/; add --mock for an offline dry run)
 python flipcurve.py prep
 python flipcurve.py args                        # dedicated argument-writing prompt, format-checked
-python argfix.py judge --all && python argfix.py regen   # audit; `run` uses ONLY audited arguments
+python argfix.py judge --all && python argfix.py regen --all   # audit; `run` uses ONLY audited arguments
 python flipcurve.py run                         # writes runs_<model>.jsonl
 # Phase 2 (strictly sequential; from flipcurve/hard/)
 ./run_hard.sh screen   # repeat until counts plateau
