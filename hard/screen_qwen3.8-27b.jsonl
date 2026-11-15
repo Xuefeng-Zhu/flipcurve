@@ -275,3 +275,6 @@
 {"model": "qwen3.8-27b", "qid": 1246, "category": "law", "gold": "F", "answer": "B", "conf": 65, "raw": "\n\nANSWER: B\nCONFIDENCE: 65", "correct0": false}
 {"model": "qwen3.8-27b", "qid": 6711, "category": "health", "gold": "C", "answer": "C", "conf": 100, "raw": "\n\nANSWER: C\nCONFIDENCE: 100", "correct0": true}
 {"model": "qwen3.8-27b", "qid": 4848, "category": "history", "gold": "C", "answer": "D", "conf": 90, "raw": "\n\nANSWER: D\nCONFIDENCE: 90", "correct0": false}
+{"model": "qwen3.8-27b", "qid": 11155, "category": "philosophy", "gold": "E", "answer": "E", "conf": 95, "raw": "\n\nANSWER: E\nCONFIDENCE: 95", "correct0": true}
+{"model": "qwen3.8-27b", "qid": 1254, "category": "law", "gold": "A", "answer": "A", "conf": 92, "raw": "\n\nANSWER: A\nCONFIDENCE: 92", "correct0": true}
+{"model": "qwen3.8-27b", "qid": 11165, "category": "philosophy", "gold": "J", "answer": "I", "conf": 85, "raw": "\n\nANSWER: I\nCONFIDENCE: 85", "correct0": false}

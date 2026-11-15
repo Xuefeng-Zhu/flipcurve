@@ -231,3 +231,6 @@
 {"model": "glm-5.2", "qid": 6594, "category": "health", "gold": "A", "answer": "A", "conf": 85, "raw": "ANSWER: A\nCONFIDENCE: 85", "correct0": true}
 {"model": "glm-5.2", "qid": 914, "category": "law", "gold": "F", "answer": "F", "conf": 92, "raw": "ANSWER: F\nCONFIDENCE: 92", "correct0": true}
 {"model": "glm-5.2", "qid": 5018, "category": "history", "gold": "F", "answer": "F", "conf": 86, "raw": "ANSWER: F\nCONFIDENCE: 86", "correct0": true}
+{"model": "glm-5.2", "qid": 11644, "category": "engineering", "gold": "C", "answer": "C", "conf": 95, "raw": "ANSWER: C\nCONFIDENCE: 95", "correct0": true}
+{"model": "glm-5.2", "qid": 1011, "category": "law", "gold": "E", "answer": "E", "conf": 95, "raw": "ANSWER: E\nCONFIDENCE: 95", "correct0": true}
+{"model": "glm-5.2", "qid": 4799, "category": "history", "gold": "H", "answer": "H", "conf": 90, "raw": "ANSWER: H\nCONFIDENCE: 90", "correct0": true}

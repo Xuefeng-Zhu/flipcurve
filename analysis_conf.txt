@@ -1,11 +1,11 @@
 initially RIGHT -> C
   conf0 <80: n=8 rate=50% [22,78]
-  conf0 80-89: n=77 rate=30% [21,41]
-  conf0 90-94: n=184 rate=10% [6,15]
-  conf0 95-100: n=1184 rate=3% [3,5]
+  conf0 80-89: n=78 rate=31% [22,42]
+  conf0 90-94: n=191 rate=10% [7,16]
+  conf0 95-100: n=1209 rate=3% [3,5]
 initially WRONG -> W
   conf0 <80: n=17 rate=88% [66,97]
-  conf0 80-89: n=94 rate=77% [67,84]
-  conf0 90-94: n=107 rate=70% [61,78]
-  conf0 95-100: n=123 rate=45% [36,54]
-C reweighted to W conf distribution: 15.0
+  conf0 80-89: n=96 rate=77% [68,84]
+  conf0 90-94: n=108 rate=70% [61,78]
+  conf0 95-100: n=124 rate=45% [37,54]
+C reweighted to W conf distribution: 15.6
