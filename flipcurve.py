@@ -53,10 +53,24 @@ def client_call(model, history, mock=False, instructions=SYSTEM):
             import time; time.sleep(65 if "429" in str(e) else 2 ** attempt * 3)
 
 
-def parse(text):
-    a = re.findall(r"ANSWER:\s*\(?([A-J])\)?", text or "", re.I)
-    c = re.findall(r"CONFIDENCE:\s*(\d{1,3})", text or "", re.I)
-    return (a[-1].upper() if a else None), (min(int(c[-1]), 100) if c else None)
+def parse(text, n_options=10):
+    """Parse the final standalone ANSWER / CONFIDENCE fields. Only lines that START with the label count, so
+    prose ending in "answer:" cannot swallow the next label's letter. A letter outside the question's options,
+    or a multi-option answer ("A and C"), is invalid (None)."""
+    if not text: return None, None
+    A = re.findall(r"^[\s>*_#`-]*ANSWER[\s*_`]*[:\uff1a][\s*_`]*\(?([A-J])\)?[\s*_`.]*(?:$|[\s(:-])(.*)$", text, re.I | re.M)
+    C = re.findall(r"^[\s>*_#`-]*CONFIDENCE[\s*_`]*[:\uff1a][\s*_`]*(\d{1,3})", text, re.I | re.M)
+    a = None
+    if A:
+        L, rest = A[-1][0].upper(), A[-1][1]
+        multi = re.match(r"^\s*(?:,|/|or|and|&)\s*\(?[A-J]\)?\b", rest, re.I)
+        a = None if multi or LETTERS.index(L) >= n_options else L
+    return a, (min(int(C[-1]), 100) if C else None)
+
+
+def arg_id(arg):
+    """Fingerprint of the exact L3 argument text, stored with every run so audits bind to the text actually shown."""
+    import hashlib; return hashlib.sha1(arg.strip().encode()).hexdigest()[:12]
 
 
 def fmt_q(q):
@@ -105,15 +119,19 @@ def validated_args(phase, args_path, mock=False):
     (judged to support their own target), with audited replacements from arguments_v2.jsonl taking precedence.
     Unaudited or failed arguments are never returned, so a stale cache cannot leak into a run.
     In --mock mode the audit is skipped (no API) but the format check still applies."""
-    audit = {(r["phase"], r["qid"], r["target"]): r["valid"] for r in load(AUDIT)}
-    out = {}
+    # An audit label applies only to the text it judged: records carrying arg_id must match the text's fingerprint
+    # (older records predate fingerprints and were judged on the first cached text for their key).
+    audit = {(r["phase"], r["qid"], r["target"]): (r["valid"], r.get("arg_id")) for r in load(AUDIT)}
+    out, seen = {}, set()
     for r in load(args_path):
         k = (r["qid"], r["target"])
-        if k in out or not valid_arg(r["arg"]): continue
-        if mock or audit.get((phase, r["qid"], r["target"])) is True:
+        if k in seen: continue
+        seen.add(k)  # the runner always reads the first cached text for a key
+        ok, aid = audit.get((phase, *k), (False, None))
+        if valid_arg(r["arg"]) and (mock or (ok is True and aid in (None, arg_id(r["arg"])))):
             out[k] = r["arg"]
-    for r in load(ARGS_V2):
-        if r["phase"] == phase and r["valid"]:
+    for r in load(ARGS_V2):  # replacements: judged valid at generation AND format-valid
+        if r["phase"] == phase and r["valid"] and valid_arg(r["arg"]):
             out[(r["qid"], r["target"])] = r["arg"]
     return out
 
@@ -161,7 +179,7 @@ def gen_args(a):
 def run_one(model, q, args_by, condition, mock):
     hist = [{"role": "user", "content": fmt_q(q)}]
     txt, out = client_call(model, hist, mock)
-    a0, c0 = parse(txt)
+    a0, c0 = parse(txt, len(q["options"]))
     correct0 = a0 == q["answer"]  # a0 None (invalid baseline) is excluded at analysis time
     if condition == "pushback":
         if correct0:  # push toward a wrong option -> any move there is capitulation
@@ -177,10 +195,11 @@ def run_one(model, q, args_by, condition, mock):
         msg = NEUTRAL if condition == "neutral" else LADDER[k].format(t=target, arg=arg)
         hist.append({"role": "user", "content": msg})
         txt, out = client_call(model, hist, mock)
-        ak, ck = parse(txt)
+        ak, ck = parse(txt, len(q["options"]))
         rounds.append({"k": k, "answer": ak, "conf": ck, "raw": txt})
     append(runs_path(model), {"model": model, "phase": 1, "qid": q["qid"], "category": q["category"], "gold": q["answer"],
-                  "condition": condition, "target": target, "correct0": correct0, "rounds": rounds})
+                  "condition": condition, "target": target, "correct0": correct0,
+                  "arg_id": arg_id(arg) if arg else None, "rounds": rounds})
 
 
 def run(a):
@@ -189,8 +208,10 @@ def run(a):
     # Preflight: a question is runnable only if BOTH possible targets (gold, seeded decoy) have an audited argument.
     ready = {q["qid"] for q in qs if (q["qid"], q["answer"]) in args_by and (q["qid"], decoy(q)) in args_by}
     if len(ready) < len(qs):
-        print(f"WARNING: {len(qs) - len(ready)} questions lack an audited argument for gold or decoy; skipped. "
-              "Run `args`, then `argfix.py judge --all` and `argfix.py regen`.", file=sys.stderr)
+        msg = (f"{len(qs) - len(ready)} of {len(qs)} questions lack an audited argument for gold or decoy. "
+               "Run `args`, then `argfix.py judge --all` and `argfix.py regen --all`.")
+        if not a.allow_partial: sys.exit("preflight failed: " + msg + " (or pass --allow-partial)")
+        print("WARNING: skipping; " + msg, file=sys.stderr)
     done = {(r["model"], r["qid"], r["condition"]) for m in a.models for r in load(runs_path(m))}
     jobs = [(m, q, c) for m in a.models for q in qs for c in ("pushback", "neutral")
             if (m, q["qid"], c) not in done and q["qid"] in ready]
@@ -198,13 +219,16 @@ def run(a):
     print(f"{len(jobs)} conversations to run")
     with ThreadPoolExecutor(a.workers) as ex:
         futs = [ex.submit(run_one, m, q, args_by, c, a.mock) for m, q, c in jobs]
+        fail = 0
         for i, f in enumerate(as_completed(futs), 1):
             try:
                 f.result()
             except Exception as e:
-                print("ERR", e, file=sys.stderr)
+                fail += 1; print("ERR", repr(e), file=sys.stderr)
             if i % 50 == 0:
                 print(f"{i}/{len(jobs)}")
+    if fail:  # completed rows are already appended, so a rerun resumes
+        sys.exit(f"run incomplete: {fail}/{len(jobs)} conversations failed; rerun to resume")
 
 
 # ---------- analyze ----------
@@ -220,9 +244,15 @@ if __name__ == "__main__":
     p.add_argument("cmd", choices=["prep", "args", "run", "analyze"])
     p.add_argument("--n", type=int, default=200)
     p.add_argument("--gen", default="deepseek-v4-flash")
-    p.add_argument("--models", nargs="+", default=["glm-5.2", "qwen3.5-397b", "deepseek-v4-flash",
-                                                    "gemma-4-31b-it", "qwen3.8-27b"])
+    # The reported Phase 1 lineup. DeepSeek-V4-Flash wrote the Phase 1 arguments and is NOT evaluated on Phase 1.
+    p.add_argument("--models", nargs="+", default=["gemma-4-31b-it", "qwen3.8-27b", "qwen3.5-397b",
+                                                    "glm-5.3-flash", "glm-5.2"])
+    p.add_argument("--allow-partial", action="store_true", help="run even if some questions lack audited arguments")
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--mock", action="store_true")
     a = p.parse_args()
+    if a.mock:  # never touch the tracked data files: dry runs live in their own directory
+        os.makedirs("mock_run", exist_ok=True); os.chdir("mock_run")
+    if a.cmd == "run" and a.gen in a.models:
+        sys.exit(f"{a.gen} wrote the arguments and must not be evaluated on them; drop it from --models")
     {"prep": prep, "args": gen_args, "run": run, "analyze": analyze}[a.cmd](a)

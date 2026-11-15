@@ -46,9 +46,44 @@ for r in ded:
 AUD = {(x["phase"], x["qid"], x["target"]): x["valid"] for x in load("arg_audit.jsonl")} if os.path.exists("arg_audit.jsonl") else {}
 n_unrep = sum(1 for r in ded if r["condition"]=="pushback" and not r.get("repaired") and not AUD.get((r["phase"], r["qid"], r["target"]), True))
 if REPAIR: ded = [r for r in ded if not (r["condition"]=="pushback" and not r.get("repaired") and not AUD.get((r["phase"], r["qid"], r["target"]), True))]
+# ---- rescore every stored response with the strict parser (standalone fields, letter within the options) ----
+import flipcurve as _fc
+_Q = {}
+for _p in ("questions.jsonl", "hard/questions.jsonl"):
+    for _q in load(_p): _Q[_q["qid"]] = _q
+n_rescored = n_hit_changed = 0
+for r in ded:
+    nopt = len(_Q[r["qid"]]["options"])
+    for rd in r["rounds"]:
+        a, c = _fc.parse(rd.get("raw"), nopt)
+        if a != rd["answer"]:
+            n_rescored += 1
+            if rd["k"] > 0 and r["target"] and ((a == r["target"]) != (rd["answer"] == r["target"])): n_hit_changed += 1
+        rd["answer"], rd["conf"] = a, c
 # a conversation needs a valid round-0 answer to be classed as initially right/wrong
 n_invalid0 = sum(1 for r in ded if r["rounds"][0]["answer"] is None)
 ded = [r for r in ded if r["rounds"][0]["answer"] is not None]
+# a pushback whose rescored baseline flips right/wrong received the push meant for the other class: drop it
+n_base_flip = 0; _keep = []
+for r in ded:
+    c0 = r["rounds"][0]["answer"] == r["gold"]
+    if r["condition"] == "pushback" and c0 != r["correct0"]: n_base_flip += 1; continue
+    r["correct0"] = c0; _keep.append(r)
+ded = _keep
+# ---- bind each pushback to the exact L3 argument text it saw; drop any whose text fails the format check ----
+_ORIG = {}
+for _ph, _ap in ((1, "arguments.jsonl"), (2, "hard/arguments.jsonl")):
+    for _a in load(_ap): _ORIG.setdefault((_ph, _a["qid"], _a["target"]), _a["arg"])  # runner read first match
+_V2 = {(x["phase"], x["qid"], x["target"]): x["arg"] for x in load("arguments_v2.jsonl") if x["valid"]} if os.path.exists("arguments_v2.jsonl") else {}
+n_badformat = 0; _keep = []
+for r in ded:
+    if r["condition"] == "pushback":
+        key = (r["phase"], r["qid"], r["target"])
+        text = _V2.get(key) if r.get("repaired") else _ORIG.get(key)
+        r["arg_id"] = _fc.arg_id(text) if text else None
+        if REPAIR and not _fc.valid_arg(text): n_badformat += 1; continue
+    _keep.append(r)
+ded = _keep
 
 rows = []
 for r in ded:
@@ -82,6 +117,7 @@ pd.set_option("display.width", 200)
 print(k3[["subset", "model", "n_wrong", "W", "W_lo", "W_hi", "n_right", "C", "C_lo", "C_hi", "D"]].round(3).to_string(index=False))
 
 print(f"\nPHASE2={PHASE2} repaired L3 turns={n_repaired} dropped invalid round-0={n_invalid0} dropped unrepairable-arg={n_unrep}")
+print(f"strict parser: rescored rounds={n_rescored} (target-hit changed {n_hit_changed}); dropped baseline-class flips={n_base_flip}; dropped format-invalid L3 argument={n_badformat}")
 print("missing-answer rate in follow-up turns by model/cond:")
 print((1-df[df.k>0].groupby(["model","cond"]).valid.mean()).round(4).to_string())
 # Neutral control (phase 1 only)

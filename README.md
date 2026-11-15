@@ -20,21 +20,28 @@ Submission for the Apart Research AI x Epistemics Research Sprint (Nov 13-15, 20
 ```
 pip install adaption datasets pandas matplotlib numpy statsmodels
 export ADAPTION_API_KEY=...
-# Phase 1 (from flipcurve/; add --mock for an offline dry run)
+# Phase 1 (from flipcurve/). Default --models is the reported Phase 1 lineup:
+#   gemma-4-31b-it qwen3.8-27b qwen3.5-397b glm-5.3-flash glm-5.2
+# (DeepSeek-V4-Flash wrote the Phase 1 arguments and is refused as an evaluated model.)
+# --mock does an offline dry run inside ./mock_run/ and never touches the tracked data files.
 python flipcurve.py prep
 python flipcurve.py args                        # dedicated argument-writing prompt, format-checked
 python argfix.py judge --all && python argfix.py regen --all   # audit; `run` uses ONLY audited arguments
-python flipcurve.py run                         # writes runs_<model>.jsonl
+python flipcurve.py run                         # writes runs_<model>.jsonl; exits non-zero on any failure
+                                                # or if a question lacks audited arguments (--allow-partial)
 # Phase 2 (strictly sequential; from flipcurve/hard/)
 ./run_hard.sh screen   # repeat until counts plateau
-./run_hard.sh freeze   # writes the immutable cohort manifest.json
+./run_hard.sh freeze   # writes manifest.json; refuses incomplete/empty screens (hard.py freeze --allow-incomplete)
 ./run_hard.sh args     # cohort arguments + audit
 ./run_hard.sh push     # refuses to run without manifest.json
 # Analysis (from flipcurve/)
-bash report/build.sh   # analyze_all.py (+ extra, conf_match, report_stats) and the report
+bash report/build.sh   # all analyses; every prose number comes from report_numbers.json ({{key}} placeholders)
 python bootstrap.py    # question-cluster bootstrap for pooled W/C/D
 ```
 `flipcurve.py analyze` is an alias for `analyze_all.py`. Defaults: `PHASE2=cohort` (frozen manifest only; `PHASE2=all` for the sensitivity analysis) and `REPAIR=1` (repaired L3 turns from `l3_repair.jsonl`; `REPAIR=0` for the original turns).
+
+## Scoring
+`flipcurve.parse` reads only a standalone final `ANSWER:` line, requires a letter within the item's options and rejects multi-option answers; `analyze_all.py` rescores every stored response with it. Each run row records `arg_id`, a fingerprint of the exact L3 argument; audits and replacements are bound to that text, and arguments failing the format check are excluded even if the judge passed them.
 
 ## Data provenance and the argument audit
 An external review found that the original Phase 1 arguments were generated with the answering system prompt, so 68 of 222 used arguments did not argue for their target. `arg_audit.jsonl` holds a judge label for all 583 used arguments, `arguments_v2.jsonl` the regenerated replacements, and `l3_repair.jsonl` the re-run L3 turns (original turns kept under `old_round3`). Phase 1 decoy targets in the original runs were the first wrong-option argument in `arguments.jsonl`; the recorded `target` is authoritative for scoring. Phase 2 screening is incomplete (1,632/1,800 records); `hard/manifest.json` is the frozen cohort.

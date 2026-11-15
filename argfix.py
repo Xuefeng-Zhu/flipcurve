@@ -69,7 +69,8 @@ def judge_all(model="qwen3.5-397b", path="arg_audit.jsonl", workers=12):
         q, arg = v
         s, raw = judge_one(model, q, arg)
         fc.append(path, {"phase": k[0], "qid": k[1], "target": k[2], "gold": q["answer"], "judged": s,
-                         "valid": s == k[2], "has_answer_line": "ANSWER:" in arg, "judge_raw": raw})
+                         "valid": s == k[2], "has_answer_line": "ANSWER:" in arg,
+                         "arg_id": fc.arg_id(arg), "judge_raw": raw})
     with ThreadPoolExecutor(workers) as ex:
         _drain([ex.submit(w, k, v) for k, v in jobs], "judge")
 
@@ -84,7 +85,7 @@ def regen(gen=None, judge="qwen3.5-397b", path="arguments_v2.jsonl", tries=3, wo
     (e.g. a trailing ANSWER/CONFIDENCE line) -- and has no valid replacement yet. Questions and texts come
     from the full argument cache, so this works before any conversation has been run."""
     audit = {(r["phase"], r["qid"], r["target"]): r["valid"] for r in fc.load("arg_audit.jsonl")}
-    done = {(r["phase"], r["qid"], r["target"]) for r in fc.load(path) if r["valid"]}
+    done = {(r["phase"], r["qid"], r["target"]) for r in fc.load(path) if r["valid"] and fc.valid_arg(r["arg"])}
     u, _ = all_args()
     jobs = [k for k, ok in audit.items() if k in u and not usable(u[k][1], ok) and k not in done]
     print(len(jobs), "to regenerate", flush=True)
@@ -100,10 +101,10 @@ def regen(gen=None, judge="qwen3.5-397b", path="arguments_v2.jsonl", tries=3, wo
                   "letter, and do not state any other final value. Output only the argument.")
         for i in range(tries):
             txt = (call(g, argfix_write_sys(), prompt) or "").strip()
-            if re.search(r"ANSWER:|CONFIDENCE:", txt, re.I): continue
+            if not fc.valid_arg(txt): continue  # same format rule as originals
             s, _ = judge_one(judge, q, txt)
             if s == t:
-                fc.append(path, {"phase": k[0], "qid": k[1], "target": t, "arg": txt, "valid": True,
+                fc.append(path, {"phase": k[0], "qid": k[1], "target": t, "arg": txt, "valid": True, "arg_id": fc.arg_id(txt),
                                  "gen": g, "target_is_correct": t == q["answer"]}); return
         fc.append(path, {"phase": k[0], "qid": k[1], "target": t, "arg": txt, "valid": False, "gen": g})
     with ThreadPoolExecutor(workers) as ex:

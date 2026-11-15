@@ -48,15 +48,17 @@ def screen(a):
 
     def work(m, q):
         txt, _ = fc.client_call(m, [{"role": "user", "content": fc.fmt_q(q)}])
-        ans, conf = fc.parse(txt)
+        ans, conf = fc.parse(txt, len(q["options"]))
         fc.append(f"screen_{m}.jsonl", {"model": m, "qid": q["qid"], "category": q["category"], "gold": q["answer"],
                                         "answer": ans, "conf": conf, "raw": txt, "correct0": ans == q["answer"]})
 
     with ThreadPoolExecutor(a.workers) as ex:
+        fail = 0
         for i, f in enumerate(as_completed([ex.submit(work, m, q) for m, q in jobs]), 1):
             try: f.result()
-            except Exception as e: print("ERR", e, file=sys.stderr)
+            except Exception as e: fail += 1; print("ERR", repr(e), file=sys.stderr)
             if i % 100 == 0: print(i, flush=True)
+    if fail: sys.exit(f"screen incomplete: {fail}/{len(jobs)} calls failed; rerun to resume")
 
 
 MANIFEST = "manifest.json"
@@ -87,8 +89,17 @@ def selected(models, allow_dynamic=False):
 
 def freeze(a):
     """Write the immutable Phase-2 cohort from the final screen files (only valid round-0 answers)."""
-    assert not os.path.exists(MANIFEST), "manifest already frozen"
+    if os.path.exists(MANIFEST): sys.exit("manifest already frozen")
+    nq = len(fc.load(fc.DATA))
+    cov = {m: len({r["qid"] for r in fc.load(f"screen_{m}.jsonl") if r["answer"] is not None}) for m in a.models}
+    print("valid screens per model:", cov, "of", nq)
+    short = {m: n for m, n in cov.items() if n < nq}
+    if any(n == 0 for n in cov.values()): sys.exit("refusing to freeze: a model has no valid screens")
+    if short and not a.allow_incomplete:
+        sys.exit(f"refusing to freeze: incomplete screens {short}; rerun `screen` or pass --allow-incomplete "
+                 "(and disclose the coverage)")
     sel = selected(a.models, allow_dynamic=True)
+    if not any(sel.values()): sys.exit("refusing to freeze an empty cohort")
     json.dump({m: [r["qid"] for r in rows] for m, rows in sel.items()}, open(MANIFEST, "w"), indent=0)
     for m, rows in sel.items():
         print(m, "wrong", sum(not r["correct0"] for r in rows), "right", sum(r["correct0"] for r in rows))
@@ -155,18 +166,20 @@ def push(a):
         for k in (1, 2, 3):
             hist.append({"role": "user", "content": fc.LADDER[k].format(t=target, arg=arg)})
             txt, _ = fc.client_call(m, hist)
-            ak, ck = fc.parse(txt)
+            ak, ck = fc.parse(txt, len(q["options"]))
             rounds.append({"k": k, "answer": ak, "conf": ck, "raw": txt})
             hist.append({"role": "assistant", "content": txt})
         fc.append(f"runs_{m}.jsonl", {"model": m, "qid": q["qid"], "category": q["category"], "gold": q["answer"],
                                       "condition": "pushback", "target": target, "correct0": s["correct0"],
-                                      "phase": 2, "rounds": rounds})
+                                      "phase": 2, "arg_id": fc.arg_id(arg), "rounds": rounds})
 
+    fail = 0
     with ThreadPoolExecutor(a.workers) as ex:
         for i, f in enumerate(as_completed([ex.submit(work, m, s) for m, s in jobs]), 1):
             try: f.result()
-            except Exception as e: print("ERR", e, file=sys.stderr)
+            except Exception as e: fail += 1; print("ERR", repr(e), file=sys.stderr)
             if i % 25 == 0: print(i, flush=True)
+    if fail: sys.exit(f"push incomplete: {fail}/{len(jobs)} conversations failed; rerun to resume")
 
 
 if __name__ == "__main__":
@@ -177,5 +190,6 @@ if __name__ == "__main__":
     p.add_argument("--models", nargs="+", default=["gemma-4-31b-it", "qwen3.8-27b", "qwen3.5-397b",
                                                     "glm-5.3-flash", "glm-5.2", "deepseek-v4-flash"])
     p.add_argument("--workers", type=int, default=5)
+    p.add_argument("--allow-incomplete", action="store_true", help="freeze despite missing screens")
     a = p.parse_args()
     {"prep": prep, "screen": screen, "args": gen_args, "push": push, "freeze": freeze}[a.cmd](a)

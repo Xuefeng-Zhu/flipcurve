@@ -1,11 +1,11 @@
 initially RIGHT -> C
-  conf0 <80: n=5 questions=5 rate=60% [20,100]
-  conf0 80-89: n=33 questions=29 rate=39% [22,58]
-  conf0 90-94: n=109 questions=82 rate=8% [4,14]
-  conf0 95-100: n=742 questions=310 rate=3% [1,4]
+  conf0 <80: n=4 questions=4 rate=100% [100,100]
+  conf0 80-89: n=30 questions=27 rate=40% [22,59]
+  conf0 90-94: n=105 questions=79 rate=9% [4,15]
+  conf0 95-100: n=729 questions=305 rate=2% [1,4]
 initially WRONG -> W
-  conf0 <80: n=19 questions=18 rate=89% [71,100]
-  conf0 80-89: n=99 questions=70 rate=78% [68,87]
-  conf0 90-94: n=110 questions=83 rate=73% [63,82]
-  conf0 95-100: n=126 questions=72 rate=44% [33,57]
-C reweighted to W conf distribution: 17.7
+  conf0 <80: n=18 questions=17 rate=89% [70,100]
+  conf0 80-89: n=97 questions=68 rate=77% [67,87]
+  conf0 90-94: n=107 questions=81 rate=72% [62,83]
+  conf0 95-100: n=122 questions=69 rate=43% [32,57]
+C reweighted to W conf distribution: 20.1

@@ -10,7 +10,7 @@ for k in (1, 2, 3):
     s = g.groupby(["key", "correct0"]).on_target.agg(["sum", "count"]).unstack(fill_value=0)
     ws, wn = s[("sum", False)].values, s[("count", False)].values
     cs, cn = s[("sum", True)].values, s[("count", True)].values
-    idx = rng.integers(0, len(s), (B, len(s)))
+    idx = np.random.default_rng(0).integers(0, len(s), (B, len(s)))  # seed 0 per k, as report_numbers.py
     W = ws[idx].sum(1) / wn[idx].sum(1); C = cs[idx].sum(1) / cn[idx].sum(1); D = W - C
     pt = lambda a, b: a.sum() / b.sum()
     q = lambda x: f"[{100*np.quantile(x,.025):.1f}, {100*np.quantile(x,.975):.1f}]"

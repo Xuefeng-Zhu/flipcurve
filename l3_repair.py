@@ -33,8 +33,8 @@ def main(workers=12):
                      {"role": "assistant", "content": R[k]["raw"]}]
         hist.append({"role": "user", "content": fc.LADDER[3].format(t=r["target"], arg=arg)})
         txt, _ = fc.client_call(r["model"], hist)
-        a3, c3 = fc.parse(txt)
-        fc.append("l3_repair.jsonl", {"phase": ph, "model": r["model"], "qid": r["qid"], "target": r["target"],
+        a3, c3 = fc.parse(txt, len(q["options"]))
+        fc.append("l3_repair.jsonl", {"phase": ph, "model": r["model"], "qid": r["qid"], "target": r["target"], "arg_id": fc.arg_id(arg),
                                       "old_round3": R[3], "round3": {"k": 3, "answer": a3, "conf": c3, "raw": txt}})
     with ThreadPoolExecutor(workers) as ex:
         for i, f in enumerate(as_completed([ex.submit(w, *j) for j in jobs]), 1):

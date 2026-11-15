@@ -2,3 +2,4 @@ log_*.txt
 __pycache__/
 hard/argjobs/batch*.jsonl
 *.pyc
+mock_run/

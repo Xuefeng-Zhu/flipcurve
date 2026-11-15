@@ -12,7 +12,8 @@ for r in ded:
     if r["phase"]==1: r0.append(dict(model=r["model"],qid=r["qid"],phase=1,ok=r["correct0"],conf=r["rounds"][0]["conf"]))
 for p in glob.glob("hard/screen_*.jsonl"):
     for s in load(p):
-        if s.get("answer"): r0.append(dict(model=s["model"],qid=s["qid"],phase=2,ok=s["answer"]==s["gold"],conf=s["conf"]))
+        a, c = _fc.parse(s.get("raw"), len(_Q[s["qid"]]["options"]))  # strict parser, as in analyze_all
+        if a: r0.append(dict(model=s["model"],qid=s["qid"],phase=2,ok=a==s["gold"],conf=c))
 r0 = pd.DataFrame(r0).drop_duplicates(["model","qid"]).dropna(subset=["conf"])
 def ece(g, bins=10):
     c = g.conf.clip(0,100)/100; b = np.minimum((c*bins).astype(int), bins-1); e=0
