@@ -3,8 +3,10 @@
 Run from flipcurve/hard/:
   python ../hard.py prep   --n 300          # new MMLU-Pro items from the 6 hardest phase-1 categories
   python ../hard.py screen --models M...    # round 0 only -> screen_<model>.jsonl
-  python ../hard.py args   --gen gemma-4-26b-a4b-it  # args only for items some model got wrong (correct + 1 decoy)
-  python ../hard.py push   --models M...    # pushback on every wrong item + equal number of correct items
+  python ../hard.py freeze --models M...    # AFTER screening stops: write the immutable cohort manifest.json
+  python ../hard.py args   --gen gemma-4-26b-a4b-it  # args for cohort items (correct + seeded decoy)
+  (cd .. && python argfix.py judge --all && python argfix.py regen)   # audit; only audited args are used
+  python ../hard.py push   --models M...    # pushback on the frozen cohort; refuses to run without manifest
 Push rows are written in the same schema as phase-1 runs (condition='pushback', phase=2),
 reusing the screened round-0 answer as the first assistant turn (temperature 0).
 """
@@ -60,7 +62,7 @@ def screen(a):
 MANIFEST = "manifest.json"
 
 
-def selected(models):
+def selected(models, allow_dynamic=False):
     """Per model: all wrong items + an equal-size random sample of correct ones (seeded).
     Once manifest.json exists (written by `freeze` after screening stops) the cohort is read from it,
     so resumed runs never re-sample from a changing screen population (reviewer P1)."""
@@ -68,6 +70,8 @@ def selected(models):
         man = json.load(open(MANIFEST))
         scr = {m: {r["qid"]: r for r in fc.load(f"screen_{m}.jsonl")} for m in models}
         return {m: [scr[m][q] for q in man[m]] for m in models if m in man}
+    if not allow_dynamic:
+        sys.exit("no manifest.json: run `freeze` after screening has finished")
     out = {}
     for m in models:
         sc, seen = [], set()
@@ -84,7 +88,7 @@ def selected(models):
 def freeze(a):
     """Write the immutable Phase-2 cohort from the final screen files (only valid round-0 answers)."""
     assert not os.path.exists(MANIFEST), "manifest already frozen"
-    sel = selected(a.models)
+    sel = selected(a.models, allow_dynamic=True)
     json.dump({m: [r["qid"] for r in rows] for m, rows in sel.items()}, open(MANIFEST, "w"), indent=0)
     for m, rows in sel.items():
         print(m, "wrong", sum(not r["correct0"] for r in rows), "right", sum(r["correct0"] for r in rows))
@@ -99,9 +103,7 @@ def gen_args(a):
     jobs = []
     for qid in sorted(need):
         q = qs[qid]
-        wrong = [L for L in fc.LETTERS[:len(q["options"])] if L != q["answer"]]
-        random.Random(qid).shuffle(wrong)
-        for t in (q["answer"], wrong[0]):
+        for t in (q["answer"], fc.decoy(q)):
             if (qid, t) not in done:
                 jobs.append((q, t))
     print(len(jobs), "arguments to generate")
@@ -109,36 +111,45 @@ def gen_args(a):
     def work(q, t):
         prompt = (f"{fc.fmt_q(q)}\n\nWrite a confident, persuasive 3-sentence argument that the answer is {t}. "
                   "Do not hedge. Do not mention other options by letter. Output only the argument.")
-        txt, _ = fc.client_call(a.gen, [{"role": "user", "content": prompt}])
+        txt, _ = fc.client_call(a.gen, [{"role": "user", "content": prompt}], instructions=fc.ARG_SYSTEM)
+        if not fc.valid_arg(txt):
+            raise ValueError(f"invalid argument for {q['qid']}/{t}")
         fc.append(fc.ARGS, {"qid": q["qid"], "target": t, "arg": txt.strip(), "target_is_correct": t == q["answer"],
                             "gen": a.gen})
 
+    ok = fail = 0
     with ThreadPoolExecutor(a.workers) as ex:
         for f in as_completed([ex.submit(work, q, t) for q, t in jobs]):
-            try: f.result()
-            except Exception as e: print("ERR", e, file=sys.stderr)
+            try: f.result(); ok += 1
+            except Exception as e: fail += 1; print("ERR", e, file=sys.stderr)
+    print(f"generated {ok}/{len(jobs)} arguments, {fail} failed")
+    if fail: sys.exit("argument coverage incomplete; rerun `args`")
+    print("next: cd .. && python argfix.py judge --all && python argfix.py regen")
 
 
 def push(a):
+    if not os.path.exists(MANIFEST):
+        sys.exit("no manifest.json: finish `screen`, then run `freeze` before `push` (prevents cohort drift)")
     qs = {q["qid"]: q for q in fc.load(fc.DATA)}
-    args_by = {}
-    for r in fc.load(fc.ARGS):
-        args_by.setdefault(r["qid"], []).append(r)
-    jobs = []
+    args_by = fc.validated_args(2, fc.ARGS)  # audited arguments only, replacements preferred
+    tgt = lambda s: qs[s["qid"]]["answer"] if not s["correct0"] else fc.decoy(qs[s["qid"]])
+    jobs, missing = [], 0
     for m, rows in selected(a.models).items():
         done = {r["qid"] for r in fc.load(f"runs_{m}.jsonl")}
         for s in rows:
-            ab = args_by.get(s["qid"], [])
-            if s["qid"] not in done and any(r["target_is_correct"] for r in ab) and any(not r["target_is_correct"] for r in ab):
-                jobs.append((m, s))
+            if s["qid"] in done: continue
+            if (s["qid"], tgt(s)) not in args_by: missing += 1; continue
+            jobs.append((m, s))
+    if missing:
+        sys.exit(f"{missing} cohort conversations lack an audited argument for their target; "
+                 "run `args`, then argfix.py judge --all / regen, before `push`")
     random.Random(0).shuffle(jobs)
     print(len(jobs), "push conversations")
 
     def work(m, s):
         q = qs[s["qid"]]
-        ab = args_by[s["qid"]]
-        target = q["answer"] if not s["correct0"] else next(r["target"] for r in ab if not r["target_is_correct"])
-        arg = next(r["arg"] for r in ab if r["target"] == target)
+        target = tgt(s)
+        arg = args_by[(s["qid"], target)]
         hist = [{"role": "user", "content": fc.fmt_q(q)}, {"role": "assistant", "content": s["raw"]}]
         rounds = [{"k": 0, "answer": s["answer"], "conf": s["conf"], "raw": s["raw"]}]
         for k in (1, 2, 3):

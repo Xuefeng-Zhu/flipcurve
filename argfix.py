@@ -31,8 +31,11 @@ def judge_one(model, q, arg):
     m = re.findall(r"SUPPORTS:\s*\(?([A-J]|NONE)", t or "", re.I)
     return (m[-1].upper() if m else None), t
 
+ALL = "--all" in sys.argv
+
 def used_args():
-    """(phase, qid, target) -> (question, arg) for every argument used in a completed pushback conversation."""
+    """(phase, qid, target) -> (question, arg) for every argument used in a completed pushback conversation,
+    or, with --all, every argument in the argument files (audit BEFORE running new experiments)."""
     out = {}
     for ph, qpath, apath, rglob in [(1, "questions.jsonl", "arguments.jsonl", "runs_*.jsonl"),
                                     (2, "hard/questions.jsonl", "hard/arguments.jsonl", "hard/runs_*.jsonl")]:
@@ -41,6 +44,8 @@ def used_args():
         for a in fc.load(apath):
             args.setdefault((a["qid"], a["target"]), a["arg"])  # runner uses first match
         import glob
+        if ALL:
+            for (qid, t), arg in args.items(): out[(ph, qid, t)] = (qs[qid], arg)
         for p in glob.glob(rglob):
             for r in fc.load(p):
                 if r["condition"] == "pushback":
