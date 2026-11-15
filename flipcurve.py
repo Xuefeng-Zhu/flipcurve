@@ -9,7 +9,7 @@ python flipcurve.py run     --models glm-5.2 qwen3.5-397b deepseek-v4-flash gemm
 python flipcurve.py analyze                         # tables + figures
 Add --mock to any step to dry-run without the API.
 """
-import argparse, json, os, random, re, sys, threading
+import argparse, hashlib, json, os, random, re, sys, threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import glob
@@ -58,19 +58,24 @@ def parse(text, n_options=10):
     prose ending in "answer:" cannot swallow the next label's letter. A letter outside the question's options,
     or a multi-option answer ("A and C"), is invalid (None)."""
     if not text: return None, None
-    A = re.findall(r"^[\s>*_#`-]*ANSWER[\s*_`]*[:\uff1a][\s*_`]*\(?([A-J])\)?[\s*_`.]*(?:$|[\s(:-])(.*)$", text, re.I | re.M)
+    labels = list(re.finditer(r"^[ \t>*_#`-]*ANSWER[ \t*_`]*[:\uff1a]", text, re.I | re.M))
     C = re.findall(r"^[\s>*_#`-]*CONFIDENCE[\s*_`]*[:\uff1a][\s*_`]*(\d{1,3})", text, re.I | re.M)
     a = None
-    if A:
-        L, rest = A[-1][0].upper(), A[-1][1]
-        multi = re.match(r"^\s*(?:,|/|or|and|&)\s*\(?[A-J]\)?\b", rest, re.I)
-        a = None if multi or LETTERS.index(L) >= n_options else L
+    if labels:
+        # Parse the last declared field even when it is malformed. An earlier field cannot replace it.
+        answer = re.match(r"[\s*_`]*\(?([A-J])\)?[\s*_`.]*(?:$|[\s(:-])(.*)$",
+                          text[labels[-1].end():], re.I | re.M)
+        if answer:
+            letter, rest = answer[1].upper(), answer[2]
+            multi = re.match(r"^\s*(?:,|/|or|and|&)[\s*_`(]*[A-J]\b", rest, re.I)
+            if not multi and LETTERS.index(letter) < n_options:
+                a = letter
     return a, (min(int(C[-1]), 100) if C else None)
 
 
 def arg_id(arg):
     """Fingerprint of the exact L3 argument text, stored with every run so audits bind to the text actually shown."""
-    import hashlib; return hashlib.sha1(arg.strip().encode()).hexdigest()[:12]
+    return hashlib.sha1(arg.encode("utf-8")).hexdigest()[:12]
 
 
 def fmt_q(q):
@@ -114,25 +119,86 @@ def valid_arg(text):
     return bool(text) and not re.search(r"ANSWER:|CONFIDENCE:", text, re.I) and len(text.strip()) >= 80
 
 
+def argument_key(row):
+    return row["phase"], row["qid"], row["target"]
+
+
+class ArgumentCache:
+    """Resolve argument text and audit results by fingerprint, or by historical cache order for legacy rows."""
+
+    def __init__(self, paths, audit_path="arg_audit.jsonl", replacements_path="arguments_v2.jsonl"):
+        self.originals = {}
+        self.original_versions = {}
+        for phase, path in paths.items():
+            for row in load(path):
+                key = phase, row["qid"], row["target"]
+                text = row["arg"]
+                self.originals.setdefault(key, text)
+                self.original_versions[key, arg_id(text)] = text
+
+        self.audits = {}
+        self.fingerprinted_keys = set()
+        for row in load(audit_path):
+            key, fingerprint = argument_key(row), row.get("arg_id")
+            self.audits[key, fingerprint] = row["valid"]
+            if fingerprint is not None:
+                self.fingerprinted_keys.add(key)
+
+        self.replacements = {}
+        self.replacement_versions = {}
+        self.legacy_replacements = {}
+        for row in load(replacements_path):
+            if row["valid"] is not True:
+                continue
+            key, text = argument_key(row), row["arg"]
+            recorded_id = row.get("arg_id")
+            if recorded_id is None:
+                self.legacy_replacements[key] = text
+            if not valid_arg(text):
+                continue
+            fingerprint = arg_id(text)
+            if recorded_id not in (None, fingerprint):
+                continue
+            self.replacements[key] = text
+            self.replacement_versions[key, fingerprint] = text
+
+    def original_audit(self, key, text):
+        if text is None:
+            return None
+        identity = key, arg_id(text)
+        if identity in self.audits:
+            return self.audits[identity]
+        # A legacy label applies to the first original only. Once this key has a fingerprinted audit,
+        # a legacy label cannot approve a changed version of its text.
+        if key not in self.fingerprinted_keys and text == self.originals.get(key):
+            return self.audits.get((key, None))
+        return None
+
+    def run_argument(self, run):
+        """Return the text actually used by a pushback run and its semantic audit status."""
+        key, fingerprint = argument_key(run), run.get("arg_id")
+        if fingerprint is None:
+            text = self.originals.get(key)
+        else:
+            replacement = self.replacement_versions.get((key, fingerprint))
+            if replacement is not None:
+                return replacement, True
+            text = self.original_versions.get((key, fingerprint))
+        return text, self.original_audit(key, text)
+
+
 def validated_args(phase, args_path, mock=False):
     """(qid, target) -> argument text, using ONLY arguments that passed the argfix.py audit
     (judged to support their own target), with audited replacements from arguments_v2.jsonl taking precedence.
     Unaudited or failed arguments are never returned, so a stale cache cannot leak into a run.
     In --mock mode the audit is skipped (no API) but the format check still applies."""
-    # An audit label applies only to the text it judged: records carrying arg_id must match the text's fingerprint
-    # (older records predate fingerprints and were judged on the first cached text for their key).
-    audit = {(r["phase"], r["qid"], r["target"]): (r["valid"], r.get("arg_id")) for r in load(AUDIT)}
-    out, seen = {}, set()
-    for r in load(args_path):
-        k = (r["qid"], r["target"])
-        if k in seen: continue
-        seen.add(k)  # the runner always reads the first cached text for a key
-        ok, aid = audit.get((phase, *k), (False, None))
-        if valid_arg(r["arg"]) and (mock or (ok is True and aid in (None, arg_id(r["arg"])))):
-            out[k] = r["arg"]
-    for r in load(ARGS_V2):  # replacements: judged valid at generation AND format-valid
-        if r["phase"] == phase and r["valid"] and valid_arg(r["arg"]):
-            out[(r["qid"], r["target"])] = r["arg"]
+    cache = ArgumentCache({phase: args_path}, AUDIT, ARGS_V2)
+    out = {
+        key[1:]: text for key, text in cache.originals.items()
+        if valid_arg(text) and (mock or cache.original_audit(key, text) is True)
+    }
+    if not mock:
+        out.update({key[1:]: text for key, text in cache.replacements.items() if key[0] == phase})
     return out
 
 

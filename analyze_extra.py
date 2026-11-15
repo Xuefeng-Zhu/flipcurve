@@ -3,21 +3,12 @@ import json, math, glob
 import pandas as pd
 exec(open("analyze_all.py").read().split("def curves")[0])  # reuse loading -> df, wilson
 SHARED = {"history","philosophy","engineering","law","business","health"}
-alen = {}
-for p, ph in [("arguments.jsonl",1), ("hard/arguments.jsonl",2)]:
-    for r in load(p): alen[(ph, r["qid"], r["target"])] = len(r["arg"])
-for r in load("arguments_v2.jsonl"):
-    if r["valid"]: alen[(r["phase"], r["qid"], r["target"])] = len(r["arg"])
-df["arglen"] = [alen.get((p,q,t)) for p,q,t in zip(df.phase, df.qid, df.target)]
 pb3 = df[(df.cond=="pushback") & (df.k==3)].copy()
 pd.set_option("display.width", 220)
 def rate(g, col="on_target"):
     p,lo,hi = wilson(int(g[col].sum()), len(g)); return pd.Series(dict(n=len(g), rate=p, lo=lo, hi=hi))
-print("== Arg length (chars) by phase & target correctness ==")
-print(pd.DataFrame([dict(phase=k[0], target_correct=v) for k,v in []]) if False else "")
-for ph in (1,2):
-    L = [(v, k) for k,v in alen.items() if k[0]==ph]
-print(df.drop_duplicates(["phase","qid","target"]).assign(tc=lambda d: d.target==d.gold).groupby(["phase","tc"]).arglen.describe()[["count","mean","50%"]].round(0))
+print("== Arg length (chars) by phase & target correctness ==\n")
+print(pb3.drop_duplicates(["phase","qid","target","arg_id"]).assign(tc=lambda d: d.target==d.gold).groupby(["phase","tc"]).arglen.describe()[["count","mean","50%"]].round(0))
 print("\n== C(k=3) by phase, restricted to the 6 shared categories ==")
 c = pb3[pb3.correct0 & pb3.cat.isin(SHARED)]
 print(c.groupby(["model","phase"]).apply(rate).round(3).to_string())

@@ -36,13 +36,31 @@ def prep(a):
     print("wrote", len(qs))
 
 
+def valid_screens(model, questions):
+    """Read the first valid response per current question, including legacy screen files."""
+    screens = {}
+    for row in fc.load(f"screen_{model}.jsonl"):
+        qid = row.get("qid")
+        if qid in screens or qid not in questions:
+            continue
+        raw = row.get("raw")
+        if not isinstance(raw, str):
+            continue
+        q = questions[qid]
+        answer, confidence = fc.parse(raw, len(q["options"]))
+        if answer is not None:
+            screens[qid] = {**row, "answer": answer, "conf": confidence, "correct0": answer == q["answer"]}
+    return screens
+
+
 def screen(a):
-    qs = fc.load(fc.DATA)
+    qs = {q["qid"]: q for q in fc.load(fc.DATA)}
+    if not qs:
+        sys.exit("no Phase 2 questions: run `prep` before `screen`")
     jobs = []
     for m in a.models:
-        path = f"screen_{m}.jsonl"
-        done = {r["qid"] for r in fc.load(path)}
-        jobs += [(m, q) for q in qs if q["qid"] not in done]
+        done = valid_screens(m, qs)
+        jobs += [(m, q) for qid, q in qs.items() if qid not in done]
     random.Random(0).shuffle(jobs)
     print(len(jobs), "screen calls")
 
@@ -51,6 +69,8 @@ def screen(a):
         ans, conf = fc.parse(txt, len(q["options"]))
         fc.append(f"screen_{m}.jsonl", {"model": m, "qid": q["qid"], "category": q["category"], "gold": q["answer"],
                                         "answer": ans, "conf": conf, "raw": txt, "correct0": ans == q["answer"]})
+        if ans is None:
+            raise ValueError(f"invalid round-0 answer for {m}/{q['qid']}")
 
     with ThreadPoolExecutor(a.workers) as ex:
         fail = 0
@@ -64,52 +84,48 @@ def screen(a):
 MANIFEST = "manifest.json"
 
 
-def selected(models, allow_dynamic=False):
-    """Per model: all wrong items + an equal-size random sample of correct ones (seeded).
-    Once manifest.json exists (written by `freeze` after screening stops) the cohort is read from it,
-    so resumed runs never re-sample from a changing screen population (reviewer P1)."""
-    if os.path.exists(MANIFEST):
-        man = json.load(open(MANIFEST))
-        scr = {m: {r["qid"]: r for r in fc.load(f"screen_{m}.jsonl")} for m in models}
-        return {m: [scr[m][q] for q in man[m]] for m in models if m in man}
-    if not allow_dynamic:
+def frozen_cohort(models):
+    if not os.path.exists(MANIFEST):
         sys.exit("no manifest.json: run `freeze` after screening has finished")
-    out = {}
-    for m in models:
-        sc, seen = [], set()
-        for r in fc.load(f"screen_{m}.jsonl"):
-            if r["answer"] is not None and r["qid"] not in seen:
-                seen.add(r["qid"]); sc.append(r)
-        wrong = [r for r in sc if not r["correct0"]]
-        right = sorted([r for r in sc if r["correct0"]], key=lambda r: r["qid"])
-        random.Random(sum(map(ord, m))).shuffle(right)
-        out[m] = wrong + right[:len(wrong)]
-    return out
+    with open(MANIFEST) as f:
+        manifest = json.load(f)
+    missing = [m for m in models if m not in manifest]
+    if missing:
+        sys.exit(f"models absent from the frozen cohort: {', '.join(missing)}")
+    return {m: manifest[m] for m in models}
 
 
 def freeze(a):
     """Write the immutable Phase-2 cohort from the final screen files (only valid round-0 answers)."""
     if os.path.exists(MANIFEST): sys.exit("manifest already frozen")
-    nq = len(fc.load(fc.DATA))
-    cov = {m: len({r["qid"] for r in fc.load(f"screen_{m}.jsonl") if r["answer"] is not None}) for m in a.models}
+    qs = {q["qid"]: q for q in fc.load(fc.DATA)}
+    nq = len(qs)
+    screens = {m: valid_screens(m, qs) for m in a.models}
+    cov = {m: len(rows) for m, rows in screens.items()}
     print("valid screens per model:", cov, "of", nq)
     short = {m: n for m, n in cov.items() if n < nq}
     if any(n == 0 for n in cov.values()): sys.exit("refusing to freeze: a model has no valid screens")
     if short and not a.allow_incomplete:
         sys.exit(f"refusing to freeze: incomplete screens {short}; rerun `screen` or pass --allow-incomplete "
                  "(and disclose the coverage)")
-    sel = selected(a.models, allow_dynamic=True)
+    sel = {}
+    for m, rows in screens.items():
+        wrong = [r for r in rows.values() if not r["correct0"]]
+        right = sorted((r for r in rows.values() if r["correct0"]), key=lambda r: r["qid"])
+        random.Random(sum(map(ord, m))).shuffle(right)
+        sel[m] = wrong + right[:len(wrong)]
     if not any(sel.values()): sys.exit("refusing to freeze an empty cohort")
-    json.dump({m: [r["qid"] for r in rows] for m, rows in sel.items()}, open(MANIFEST, "w"), indent=0)
+    with open(MANIFEST, "w") as f:
+        json.dump({m: [r["qid"] for r in rows] for m, rows in sel.items()}, f, indent=0)
     for m, rows in sel.items():
         print(m, "wrong", sum(not r["correct0"] for r in rows), "right", sum(r["correct0"] for r in rows))
 
 
 def gen_args(a):
     qs = {q["qid"]: q for q in fc.load(fc.DATA)}
-    need = set()
-    for rows in selected(a.models).values():
-        need |= {r["qid"] for r in rows}
+    need = {qid for qids in frozen_cohort(a.models).values() for qid in qids}
+    if missing := need - qs.keys():
+        sys.exit(f"questions absent from the current Phase 2 dataset: {sorted(missing)}")
     done = {(r["qid"], r["target"]) for r in fc.load(fc.ARGS)}
     jobs = []
     for qid in sorted(need):
@@ -139,20 +155,30 @@ def gen_args(a):
 
 
 def push(a):
-    if not os.path.exists(MANIFEST):
-        sys.exit("no manifest.json: finish `screen`, then run `freeze` before `push` (prevents cohort drift)")
+    cohort = frozen_cohort(a.models)
     qs = {q["qid"]: q for q in fc.load(fc.DATA)}
     args_by = fc.validated_args(2, fc.ARGS)  # audited arguments only, replacements preferred
     tgt = lambda s: qs[s["qid"]]["answer"] if not s["correct0"] else fc.decoy(qs[s["qid"]])
-    jobs, missing = [], 0
-    for m, rows in selected(a.models).items():
+    jobs, missing_arguments, missing_screens = [], 0, []
+    for m, qids in cohort.items():
         done = {r["qid"] for r in fc.load(f"runs_{m}.jsonl")}
-        for s in rows:
-            if s["qid"] in done: continue
-            if (s["qid"], tgt(s)) not in args_by: missing += 1; continue
+        screens = valid_screens(m, qs)
+        for qid in qids:
+            if qid in done:  # retain completed runs from earlier parser versions
+                continue
+            if qid not in screens:
+                missing_screens.append(f"{m}/{qid}")
+                continue
+            s = screens[qid]
+            if (qid, tgt(s)) not in args_by:
+                missing_arguments += 1
+                continue
             jobs.append((m, s))
-    if missing:
-        sys.exit(f"{missing} cohort conversations lack an audited argument for their target; "
+    if missing_screens:
+        sys.exit(f"{len(missing_screens)} pending cohort conversations lack a valid round-0 screen: "
+                 f"{', '.join(missing_screens[:10])}; check the Phase 2 questions and rerun `screen`")
+    if missing_arguments:
+        sys.exit(f"{missing_arguments} cohort conversations lack an audited argument for their target; "
                  "run `args`, then argfix.py judge --all / regen, before `push`")
     random.Random(0).shuffle(jobs)
     print(len(jobs), "push conversations")

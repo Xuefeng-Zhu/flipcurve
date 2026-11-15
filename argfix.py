@@ -1,9 +1,9 @@
 """Audit and repair L3 arguments (reviewer P1). Run from flipcurve/.
 judge: for every argument used in a completed conversation, ask a judge model which option the
 argument argues for (separate system prompt, no answer-format instruction). Invalid = judged option != target.
-regen: rewrite invalid Phase-1 arguments with a dedicated argument-writing system prompt, re-judge.
+regen: rewrite unusable arguments with a dedicated argument-writing system prompt, re-judge.
 """
-import json, re, sys, time, random, os
+import re, sys, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import flipcurve as fc
 
@@ -28,8 +28,13 @@ def call(model, sys_, user):
 
 def judge_one(model, q, arg):
     t = call(model, JUDGE_SYS, f"{fc.fmt_q(q)}\n\nARGUMENT:\n{arg}")
-    m = re.findall(r"SUPPORTS:\s*\(?([A-J]|NONE)", t or "", re.I)
-    return (m[-1].upper() if m else None), t
+    match = re.fullmatch(r"\s*SUPPORTS:[ \t]*(?:([A-J]|NONE)|\(([A-J])\))\s*", t or "", re.I)
+    if match is None:
+        raise ValueError("judge response must name one supported option or NONE")
+    supported = (match[1] or match[2]).upper()
+    if supported != "NONE" and supported not in fc.LETTERS[:len(q["options"])]:
+        raise ValueError(f"judge named an option outside the question: {supported}")
+    return supported, t
 
 ALL = "--all" in sys.argv
 
@@ -62,8 +67,9 @@ def _drain(fs, label):
     if fail: sys.exit(f"{label}: {fail} job(s) failed")
 
 def judge_all(model="qwen3.5-397b", path="arg_audit.jsonl", workers=12):
-    done = {(r["phase"], r["qid"], r["target"]) for r in fc.load(path)}
-    jobs = [(k, v) for k, v in used_args().items() if k not in done]
+    # Legacy labels remain readable, but only a label for this exact text completes a judge job.
+    done = {(fc.argument_key(r), r.get("arg_id")) for r in fc.load(path)}
+    jobs = [(k, v) for k, v in used_args().items() if (k, fc.arg_id(v[1])) not in done]
     print(len(jobs), "to judge", flush=True)
     def w(k, v):
         q, arg = v
@@ -75,19 +81,15 @@ def judge_all(model="qwen3.5-397b", path="arg_audit.jsonl", workers=12):
         _drain([ex.submit(w, k, v) for k, v in jobs], "judge")
 
 
-def usable(arg, audit_ok):
-    """The single 'usable' rule shared by regen and fc.validated_args: format-valid AND judged to support its target."""
-    return fc.valid_arg(arg) and audit_ok is True
-
 def regen(gen=None, judge="qwen3.5-397b", path="arguments_v2.jsonl", tries=3, workers=8):
-    """Rewrite every invalid argument (judged option != target) for its exact (phase, qid, target)."""
-    """Candidates: every audited cached argument that is not usable -- judged invalid OR format-invalid
-    (e.g. a trailing ANSWER/CONFIDENCE line) -- and has no valid replacement yet. Questions and texts come
-    from the full argument cache, so this works before any conversation has been run."""
-    audit = {(r["phase"], r["qid"], r["target"]): r["valid"] for r in fc.load("arg_audit.jsonl")}
-    done = {(r["phase"], r["qid"], r["target"]) for r in fc.load(path) if r["valid"] and fc.valid_arg(r["arg"])}
+    """Rewrite judge-rejected or format-invalid arguments whose current text has been audited."""
+    cache = fc.ArgumentCache({1: "arguments.jsonl", 2: "hard/arguments.jsonl"}, replacements_path=path)
     u, _ = all_args()
-    jobs = [k for k, ok in audit.items() if k in u and not usable(u[k][1], ok) and k not in done]
+    jobs = []
+    for key, (_, text) in u.items():
+        approved = cache.original_audit(key, text)
+        if approved is not None and (not approved or not fc.valid_arg(text)) and key not in cache.replacements:
+            jobs.append(key)
     print(len(jobs), "to regenerate", flush=True)
     L = fc.LETTERS
     def w(k):
@@ -109,7 +111,8 @@ def regen(gen=None, judge="qwen3.5-397b", path="arguments_v2.jsonl", tries=3, wo
         fc.append(path, {"phase": k[0], "qid": k[1], "target": t, "arg": txt, "valid": False, "gen": g})
     with ThreadPoolExecutor(workers) as ex:
         _drain([ex.submit(w, k) for k in jobs], "regen")
-    left = [k for k in jobs if k not in {(r["phase"], r["qid"], r["target"]) for r in fc.load(path) if r["valid"]}]
+    completed = fc.ArgumentCache({}, replacements_path=path).replacements
+    left = [k for k in jobs if k not in completed]
     if left: sys.exit(f"regen: {len(left)} argument(s) still without a valid replacement: {left[:10]}")
 
 def argfix_write_sys(): return WRITE_SYS

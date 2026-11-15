@@ -3,6 +3,8 @@ import glob, json, math
 import pandas as pd
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import flipcurve as _fc
+from l3_repair import load_repairs, matching_repair
 
 FLAGGED = {4800, 11671, 12048, 11204, 6657}
 # One colour per model (Okabe-Ito, colour-blind safe), shared by every figure.
@@ -39,20 +41,29 @@ seen, ded = set(), []
 for r in runs:
     k = (r["model"], r["qid"], r["condition"])
     if k not in seen: seen.add(k); ded.append(r)
-REP = {}
-if REPAIR and os.path.exists("l3_repair.jsonl"):
-    for x in load("l3_repair.jsonl"): REP[(x["phase"], x["model"], x["qid"])] = x
-n_repaired = 0
+cache = _fc.ArgumentCache({1: "arguments.jsonl", 2: "hard/arguments.jsonl"})
+repairs = load_repairs() if REPAIR else {}
+n_repaired = n_unrep = 0
+_keep = []
 for r in ded:
-    x = REP.get((r["phase"], r["model"], r["qid"])) if r["condition"] == "pushback" else None
-    if x and x["target"] == r["target"]:
-        r["rounds"] = r["rounds"][:3] + [x["round3"]]; r["repaired"] = True; n_repaired += 1
-# drop pushback conversations whose L3 argument failed audit and could not be repaired
-AUD = {(x["phase"], x["qid"], x["target"]): x["valid"] for x in load("arg_audit.jsonl")} if os.path.exists("arg_audit.jsonl") else {}
-n_unrep = sum(1 for r in ded if r["condition"]=="pushback" and not r.get("repaired") and not AUD.get((r["phase"], r["qid"], r["target"]), True))
-if REPAIR: ded = [r for r in ded if not (r["condition"]=="pushback" and not r.get("repaired") and not AUD.get((r["phase"], r["qid"], r["target"]), True))]
+    if r["condition"] == "pushback":
+        text, approved = cache.run_argument(r)
+        if REPAIR and (approved is not True or not _fc.valid_arg(text)):
+            replay, replacement = matching_repair(cache, repairs, r)
+            if replay is not None:
+                r["rounds"] = r["rounds"][:3] + [replay["round3"]]
+                r["repaired"] = True
+                text, approved = replacement, True
+                n_repaired += 1
+        if approved is not True:
+            n_unrep += 1
+            if REPAIR: continue
+        r["scored_arg_id"] = _fc.arg_id(text) if text is not None else r.get("arg_id")
+        r["arglen"] = len(text) if text is not None else None
+        r["arg_format_ok"] = _fc.valid_arg(text)
+    _keep.append(r)
+ded = _keep
 # ---- rescore every stored response with the strict parser (standalone fields, letter within the options) ----
-import flipcurve as _fc
 _Q = {}
 for _p in ("questions.jsonl", "hard/questions.jsonl"):
     for _q in load(_p): _Q[_q["qid"]] = _q
@@ -75,20 +86,10 @@ for r in ded:
     if r["condition"] == "pushback" and c0 != r["correct0"]: n_base_flip += 1; continue
     r["correct0"] = c0; _keep.append(r)
 ded = _keep
-# ---- bind each pushback to the exact L3 argument text it saw; drop any whose text fails the format check ----
-_ORIG = {}
-for _ph, _ap in ((1, "arguments.jsonl"), (2, "hard/arguments.jsonl")):
-    for _a in load(_ap): _ORIG.setdefault((_ph, _a["qid"], _a["target"]), _a["arg"])  # runner read first match
-_V2 = {(x["phase"], x["qid"], x["target"]): x["arg"] for x in load("arguments_v2.jsonl") if x["valid"]} if os.path.exists("arguments_v2.jsonl") else {}
-n_badformat = 0; _keep = []
-for r in ded:
-    if r["condition"] == "pushback":
-        key = (r["phase"], r["qid"], r["target"])
-        text = _V2.get(key) if r.get("repaired") else _ORIG.get(key)
-        r["arg_id"] = _fc.arg_id(text) if text else None
-        if REPAIR and not _fc.valid_arg(text): n_badformat += 1; continue
-    _keep.append(r)
-ded = _keep
+n_badformat = 0
+if REPAIR:
+    n_badformat = sum(not r.get("arg_format_ok", True) for r in ded)
+    ded = [r for r in ded if r.get("arg_format_ok", True)]
 
 rows = []
 for r in ded:
@@ -97,7 +98,7 @@ for r in ded:
         rows.append(dict(model=r["model"], qid=r["qid"], cat=r.get("category"), phase=r["phase"],
                          cond=r["condition"], correct0=r["correct0"], k=rd["k"], ans=rd["answer"],
                          conf=rd["conf"], conf0=c0, a0=a0, gold=r["gold"], target=r["target"],
-                         repaired=r.get("repaired", False)))
+                         repaired=r.get("repaired", False), arg_id=r.get("scored_arg_id"), arglen=r.get("arglen")))
 df = pd.DataFrame(rows)
 df["valid"] = df.ans.notna()
 df["on_target"] = df.ans == df.target            # a missing answer is never on target

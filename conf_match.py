@@ -19,7 +19,11 @@ for wrong, g in p.groupby(~p.correct0):
 w = p[~p.correct0].bin.value_counts(normalize=True); c = p[p.correct0].groupby("bin", observed=True).on_target.mean()
 print("C reweighted to W conf distribution:", round(100 * (w * c).sum(), 1))
 L = ["| Round-0 confidence | W(3): initially wrong → correct | C(3): initially right → wrong |", "|---|---|---|"]
-fmt = lambda x: f"{100*x[0][0]:.0f}% [{100*x[0][1]:.0f}, {100*x[0][2]:.0f}] (n = {x[1]:,}; {x[0][3]} q)"
+def fmt(cell):
+    (rate, low, high, n_questions), n = cell
+    interval = f" [{100*low:.0f}, {100*high:.0f}]" if 0 < rate < 1 else ""
+    return f"{100*rate:.0f}%{interval} (n = {n:,}; {n_questions} q)"
+
 for b in ["<80", "80-89", "90-94", "95-100"]:
     L.append(f"| {b.replace('-', '–').replace('<', '< ')} | {fmt(rows[(True, b)])} | {fmt(rows[(False, b)])} |")
 open("tab_conf.md", "w").write("\n".join(L) + "\n")

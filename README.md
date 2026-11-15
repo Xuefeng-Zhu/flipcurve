@@ -30,7 +30,7 @@ python argfix.py judge --all && python argfix.py regen --all   # audit; `run` us
 python flipcurve.py run                         # writes runs_<model>.jsonl; exits non-zero on any failure
                                                 # or if a question lacks audited arguments (--allow-partial)
 # Phase 2 (strictly sequential; from flipcurve/hard/)
-./run_hard.sh screen   # repeat until counts plateau
+./run_hard.sh screen   # rerun to retry failed calls and invalid answers
 ./run_hard.sh freeze   # writes manifest.json; refuses incomplete/empty screens (hard.py freeze --allow-incomplete)
 ./run_hard.sh args     # cohort arguments + audit
 ./run_hard.sh push     # refuses to run without manifest.json
@@ -41,7 +41,7 @@ python bootstrap.py    # question-cluster bootstrap for pooled W/C/D
 `flipcurve.py analyze` is an alias for `analyze_all.py`. Defaults: `PHASE2=cohort` (frozen manifest only; `PHASE2=all` for the sensitivity analysis) and `REPAIR=1` (repaired L3 turns from `l3_repair.jsonl`; `REPAIR=0` for the original turns).
 
 ## Scoring
-`flipcurve.parse` reads only a standalone final `ANSWER:` line, requires a letter within the item's options and rejects multi-option answers; `analyze_all.py` rescores every stored response with it. Each run row records `arg_id`, a fingerprint of the exact L3 argument; audits and replacements are bound to that text, and arguments failing the format check are excluded even if the judge passed them.
+`flipcurve.parse` reads the final answer field and checks the letter against the item's options. `analyze_all.py` rescores stored responses with it. New pushback runs record `arg_id`, a fingerprint of the argument text, which the analysis uses to find the corresponding audit or replacement. For older runs, the analysis reconstructs argument provenance from the released caches and repair records. Legacy approvals without fingerprints assume the original cache text. Run `argfix.py judge --all` after changing cached arguments. Arguments that fail the format check are excluded even if the judge passed them.
 
 ## Data provenance and the argument audit
 An external review found that the original Phase 1 arguments were generated with the answering system prompt, so 68 of 222 used arguments did not argue for their target. `arg_audit.jsonl` holds a judge label for all 583 used arguments, `arguments_v2.jsonl` the regenerated replacements, and `l3_repair.jsonl` the re-run L3 turns (original turns kept under `old_round3`). Phase 1 decoy targets in the original runs were the first wrong-option argument in `arguments.jsonl`; the recorded `target` is authoritative for scoring. Phase 2 screening is incomplete (1,632/1,800 records); `hard/manifest.json` is the frozen cohort.
