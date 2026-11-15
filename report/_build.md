@@ -71,7 +71,7 @@ If round 0 was wrong, t is the correct option; if correct, t is a wrong (decoy) 
 
 # 4. Results
 
-![Flip curves. Left: warranted updating W(k) on initially-wrong items, pushed toward the correct answer. Right: capitulation C(k) on initially-correct items, pushed toward a wrong answer under the identical ladder. Error bars are 95% Wilson intervals; n in legend is the number of conversations at k = 3. Phase 1 and the frozen Phase 2 cohort, pooled, with repaired L3 turns.](../flip_curves_all.png){width=100%}
+![Flip curves. Left: uptake of the correct suggestion W(k) on initially-wrong items, pushed toward the correct answer. Right: capitulation C(k) on initially-correct items, pushed toward a wrong answer under the identical ladder. Error bars are 95% Wilson intervals; n in legend is the number of conversations at k = 3. Phase 1 and the frozen Phase 2 cohort, pooled, with repaired L3 turns.](../flip_curves_all.png){width=100%}
 
 **Correct suggestions are taken up far more often than incorrect ones.** Pooled across models, W rises from 42% at L1 to 58% at L2 and 64% at L3 (221/344), while C rises from 2% to 4% to 5% (43/868; Figure 1; bootstrap D(3) = 59.3 pp [51.0, 67.5]). Every model's W(3) interval sits well above its C(3) interval (Table 1). The gap is already 39.8 pp [32.9, 47.2] at L1, where the user only says "are you sure? I think it's X": most of the asymmetry exists before any argument appears. A model that answered wrongly may already rank the gold answer second, so W partly reflects how often the suggested letter was the model's runner-up. We therefore read D as a description of asymmetric uptake under this protocol, not as a measure or bound of evidence sensitivity. Because the ladder is cumulative, escalation is also confounded with repetition and conversation length.
 
@@ -89,7 +89,7 @@ Table: Main results at full pressure (L3). W(3), C(3) in % with 95% Wilson CIs; 
 | Qwen3.8-27B | 73/207 | 67 [56–77] | 5 [3–9] | 0.62 | 83 (467) | 0.099 | 1.2 | +0.6 |
 
 
-![Each model's W(3) against C(3), with 95% CIs. The ideal is the top-left corner. No model is near the diagonal, but they spread along a trade-off between correcting errors and resisting false pressure.](../fig_wc.png){width=58%}
+![Each model's W(3) against C(3), with 95% CIs. Colours match Figure 1. The ideal is the top-left corner. No model is near the diagonal, but they spread along a trade-off between correcting errors and resisting false pressure.](../fig_wc.png){width=58%}
 
 **The gap holds within confidence bands.** Initially-wrong items are ones the model found hard, so its prior is weaker; perhaps weakly held answers simply move more. Stratifying L3 outcomes by round-0 stated confidence (Table 2; question-cluster bootstrap intervals), C depends strongly on confidence, but W exceeds C in every band. Reweighting C to the confidence distribution of the wrong items gives 20%, still far below W(3) = 64%. Confidence bands do not match difficulty, plausibility of the suggested option, or category mix, so this is a descriptive result: within broad bands of stated confidence, models moved toward correct suggestions much more often than toward incorrect ones.
 

@@ -5,6 +5,11 @@ import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 FLAGGED = {4800, 11671, 12048, 11204, 6657}
+# One colour per model (Okabe-Ito, colour-blind safe), shared by every figure.
+MODEL_COLORS = {"gemma-4-31b-it": "#D55E00", "qwen3.8-27b": "#0072B2", "qwen3.5-397b": "#56B4E9",
+                "glm-5.3-flash": "#009E73", "glm-5.2": "#CC79A7", "deepseek-v4-flash": "#E69F00"}
+MODEL_SHORT = {"gemma-4-31b-it": "Gemma-4-31B", "qwen3.8-27b": "Qwen3.8-27B", "qwen3.5-397b": "Qwen3.5-397B",
+               "glm-5.3-flash": "GLM-5.3-Flash", "glm-5.2": "GLM-5.2", "deepseek-v4-flash": "DeepSeek-V4-Flash*"}
 
 def load(p):
     return [json.loads(l) for l in open(p) if l.strip()]
@@ -132,10 +137,11 @@ print("\nmean conf change holding correct answer at k=3\n", (pb.conf - pb.conf0)
 a = t[t.subset == "all"]
 fig, ax = plt.subplots(1, 2, figsize=(10, 4), sharey=False)
 for m, g in a.groupby("model"):
-    ax[0].errorbar(g.k, g.W, yerr=[g.W - g.W_lo, g.W_hi - g.W], marker="o", capsize=3, label=f"{m} (n={g.n_wrong.iloc[-1]})")
-    ax[1].errorbar(g.k, g.C, yerr=[g.C - g.C_lo, g.C_hi - g.C], marker="o", capsize=3, label=f"{m} (n={g.n_right.iloc[-1]})")
-ax[0].set_title("Warranted update (initially wrong) - higher is better")
-ax[1].set_title("Capitulation (initially right) - lower is better")
+    c = MODEL_COLORS[m]
+    ax[0].errorbar(g.k, g.W, yerr=[g.W - g.W_lo, g.W_hi - g.W], marker="o", capsize=3, color=c, label=f"{MODEL_SHORT[m]} (n={g.n_wrong.iloc[-1]})")
+    ax[1].errorbar(g.k, g.C, yerr=[g.C - g.C_lo, g.C_hi - g.C], marker="o", capsize=3, color=c, label=f"{MODEL_SHORT[m]} (n={g.n_right.iloc[-1]})")
+ax[0].set_title("W(k): uptake of correct suggestion (initially wrong)", fontsize=10)
+ax[1].set_title("C(k): capitulation to wrong suggestion (initially right)", fontsize=10)
 for x in ax: x.set_xlabel("pushback level"); x.set_xticks([1, 2, 3]); x.legend(fontsize=7)
 ax[0].set_ylabel("share moved to pushed answer")
 plt.tight_layout(); plt.savefig("flip_curves_all.png", dpi=200)

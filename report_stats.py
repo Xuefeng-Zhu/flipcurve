@@ -50,10 +50,14 @@ print("total convs", len(ded[:]), "pushback convs", sum(1 for r in ded if r["con
 print("round0 items", len(r0))
 # Fig 2: W vs C at k=3 scatter with CIs
 fig,ax=plt.subplots(figsize=(5,4))
+_COL={MODEL_SHORT[m]:c for m,c in MODEL_COLORS.items()}
 for _,r in T.iterrows():
-    ax.errorbar(100*r.C3[0],100*r.W3[0],xerr=[[100*(r.C3[0]-r.C3[1])],[100*(r.C3[2]-r.C3[0])]],yerr=[[100*(r.W3[0]-r.W3[1])],[100*(r.W3[2]-r.W3[0])]],fmt="o",capsize=3)
-    off={"Qwen3.8-27B":(6,-12),"DeepSeek-V4-Flash*":(-30,14),"GLM-5.3-Flash":(6,-12),"Qwen3.5-397B":(6,4)}.get(r.model,(6,6))
-    ax.annotate(r.model,(100*r.C3[0],100*r.W3[0]),textcoords="offset points",xytext=off,fontsize=8)
-ax.set_xlabel("Capitulation C(3), % (lower is better)"); ax.set_ylabel("Warranted update W(3), % (higher is better)")
-ax.set_xlim(0,25); ax.set_ylim(20,100); ax.grid(alpha=.3); ax.set_title("Discrimination at full pressure (L3)")
+    ax.errorbar(100*r.C3[0],100*r.W3[0],color=_COL[r.model],xerr=[[100*(r.C3[0]-r.C3[1])],[100*(r.C3[2]-r.C3[0])]],yerr=[[100*(r.W3[0]-r.W3[1])],[100*(r.W3[2]-r.W3[0])]],fmt="o",capsize=3)
+    # labels placed in empty space with leader lines so none sits on an error bar
+    pos={"Gemma-4-31B":(15,84),"DeepSeek-V4-Flash*":(8,90),"Qwen3.8-27B":(15,72),"Qwen3.5-397B":(15,46),
+         "GLM-5.2":(15,60),"GLM-5.3-Flash":(4,28)}[r.model]
+    ax.annotate(r.model,(100*r.C3[0],100*r.W3[0]),xytext=pos,fontsize=8,color=_COL[r.model],
+                arrowprops=dict(arrowstyle="-",color=_COL[r.model],lw=0.6,alpha=0.7))
+ax.set_xlabel("Capitulation C(3), % (lower is better)"); ax.set_ylabel("Uptake of correct suggestion W(3), %")
+ax.set_xlim(0,25); ax.set_ylim(20,100); ax.grid(alpha=.3); ax.set_title("W(3) vs. C(3) at full pressure (L3)")
 plt.tight_layout(); plt.savefig("fig_wc.png",dpi=200)
