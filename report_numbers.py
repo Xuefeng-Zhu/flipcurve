@@ -53,3 +53,30 @@ for m in sorted(g3.model.unique(), key=lambda m: SH[m]):
     g = g3[g3.model == m]
     L.append(f"| {SH[m]} | " + " | ".join(cell(g[(g.phase == ph) & (g.correct0 == c0)]) for c0 in (False, True) for ph in (1, 2)) + " |")
 open("tab_phase.md", "w").write("\n".join(L) + "\n"); print("\n".join(L))
+# ---- insight numbers ----
+pbk = df[df.cond == "pushback"]
+WC = {k: (pbk[(pbk.k == k) & ~pbk.correct0].on_target.mean(), pbk[(pbk.k == k) & pbk.correct0].on_target.mean()) for k in (1, 2, 3)}
+N["cw1"] = f"{WC[1][1]/WC[1][0]:.2f}"; N["cw3"] = f"{WC[3][1]/WC[3][0]:.2f}"
+N["mcw12"] = f"{(WC[2][1]-WC[1][1])/(WC[2][0]-WC[1][0]):.2f}"; N["mcw23"] = f"{(WC[3][1]-WC[2][1])/(WC[3][0]-WC[2][0]):.2f}"
+piv = pbk.pivot_table(index=["model", "qid", "phase", "correct0"], columns="k", values="on_target", aggfunc="first").reset_index()
+for c0, lab in ((False, "w"), (True, "c")):
+    h = piv[(piv.correct0 == c0) & (piv[3] == True)]
+    N[f"{lab}_byL1"] = f"{100*(h[1] == True).mean():.0f}"
+# confidence stated with the answer at L3, after moving to the target
+s3 = g3[g3.on_target]
+x = s3[~s3.correct0].conf.dropna().values; y = s3[s3.correct0].conf.dropna().values
+N["conf_up"] = f"{x.mean():.0f}"; N["conf_cap"] = f"{y.mean():.0f}"
+N["auc_conf"] = f"{np.mean([(a > b) + 0.5*(a == b) for a in x for b in y]):.2f}"
+h = g3[g3.correct0]; N["conf0_cap"] = f"{h[h.on_target].conf0.mean():.0f}"; N["conf0_hold"] = f"{h[~h.on_target].conf0.mean():.0f}"
+# break-even reliability r*: a user who pushes on every item, suggesting the gold answer with probability r and a
+# wrong option otherwise, raises expected accuracy iff r > a*C / (a*C + (1-a)*W), with a = Phase 1 round-0 accuracy.
+r0p1 = df[(df.k == 0) & (df.phase == 1)].drop_duplicates(["model", "qid"])
+acc = r0p1.correct0.mean(); N["acc_p1"] = f"{100*acc:.0f}"
+rs = lambda a, W, C: a*C / (a*C + (1-a)*W)
+N["rstar1"] = f"{100*rs(acc, *WC[1]):.0f}"; N["rstar3"] = f"{100*rs(acc, *WC[3]):.0f}"
+R = {}
+for m in r0p1.model.unique():
+    g = g3[g3.model == m]; R[m] = rs(r0p1[r0p1.model == m].correct0.mean(), g[~g.correct0].on_target.mean(), g[g.correct0].on_target.mean())
+lo, hi = min(R, key=R.get), max(R, key=R.get)
+N["rstar_lo"] = f"{100*R[lo]:.0f}"; N["rstar_lo_m"] = SH[lo]; N["rstar_hi"] = f"{100*R[hi]:.0f}"; N["rstar_hi_m"] = SH[hi]
+json.dump(N, open("report_numbers.json", "w"), indent=1, ensure_ascii=False)
