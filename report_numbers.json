@@ -74,5 +74,15 @@
  "rstar_lo": "11",
  "rstar_lo_m": "GLM-5.3-Flash",
  "rstar_hi": "46",
- "rstar_hi_m": "GLM-5.2"
+ "rstar_hi_m": "GLM-5.2",
+ "cw1_ci": "[0.02, 0.07]",
+ "mcw23_ci": "[0.09, 0.44]",
+ "rstar1_ci": "[13, 32]",
+ "rstar3_ci": "[26, 43]",
+ "p_esc": "99.8%",
+ "p1_cw1": "0.05",
+ "p1_mcw12": "0.07",
+ "p1_mcw23": "0.10",
+ "p1_rstar1": "27",
+ "p1_rstar3": "31"
 }

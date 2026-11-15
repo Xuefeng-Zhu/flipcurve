@@ -80,3 +80,19 @@ for m in r0p1.model.unique():
 lo, hi = min(R, key=R.get), max(R, key=R.get)
 N["rstar_lo"] = f"{100*R[lo]:.0f}"; N["rstar_lo_m"] = SH[lo]; N["rstar_hi"] = f"{100*R[hi]:.0f}"; N["rstar_hi_m"] = SH[hi]
 json.dump(N, open("report_numbers.json", "w"), indent=1, ensure_ascii=False)
+
+# question-cluster bootstrap for the escalation ratios and break-even thresholds; Phase 1-only check
+def _esc(p):
+    W = {k: p[~p.correct0][k].fillna(False).astype(bool).mean() for k in (1, 2, 3)}
+    C = {k: p[p.correct0][k].fillna(False).astype(bool).mean() for k in (1, 2, 3)}
+    return [C[1]/W[1], (C[3]-C[2])/(W[3]-W[2]), rs(acc, W[1], C[1]), rs(acc, W[3], C[3]), C[2]/W[2] if False else (C[2]-C[1])/(W[2]-W[1])]
+_rng = np.random.default_rng(0); _qs = piv.qid.unique(); _g = {q: g for q, g in piv.groupby("qid")}
+_B = np.array([_esc(pd.concat([_g[q] for q in _rng.choice(_qs, len(_qs))])) for _ in range(1000)])
+_lo, _hi = np.nanpercentile(_B, [2.5, 97.5], axis=0)
+N["cw1_ci"] = f"[{_lo[0]:.2f}, {_hi[0]:.2f}]"; N["mcw23_ci"] = f"[{_lo[1]:.2f}, {_hi[1]:.2f}]"
+N["rstar1_ci"] = f"[{100*_lo[2]:.0f}, {100*_hi[2]:.0f}]"; N["rstar3_ci"] = f"[{100*_lo[3]:.0f}, {100*_hi[3]:.0f}]"
+N["p_esc"] = f"{100*np.mean(_B[:, 1] > _B[:, 0]):.1f}%"
+_p1 = _esc(piv[piv.phase == 1])
+N["p1_cw1"] = f"{_p1[0]:.2f}"; N["p1_mcw12"] = f"{_p1[4]:.2f}"; N["p1_mcw23"] = f"{_p1[1]:.2f}"
+N["p1_rstar1"] = f"{100*_p1[2]:.0f}"; N["p1_rstar3"] = f"{100*_p1[3]:.0f}"
+json.dump(N, open("report_numbers.json", "w"), indent=1, ensure_ascii=False)
