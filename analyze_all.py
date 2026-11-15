@@ -5,6 +5,7 @@ import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import flipcurve as _fc
 from l3_repair import load_repairs, matching_repair
+from analysis_metrics import load_baselines, valid_disagreement_rate
 
 FLAGGED = {4800, 11671, 12048, 11204, 6657}
 # One colour per model (Okabe-Ito, colour-blind safe), shared by every figure.
@@ -67,6 +68,8 @@ ded = _keep
 _Q = {}
 for _p in ("questions.jsonl", "hard/questions.jsonl"):
     for _q in load(_p): _Q[_q["qid"]] = _q
+# Baseline accuracy/calibration must not depend on downstream argument exclusions.
+baseline_df = pd.DataFrame(load_baselines(_Q))
 n_rescored = n_hit_changed = 0
 for r in ded:
     nopt = len(_Q[r["qid"]]["options"])
@@ -102,7 +105,7 @@ for r in ded:
 df = pd.DataFrame(rows)
 df["valid"] = df.ans.notna()
 df["on_target"] = df.ans == df.target            # a missing answer is never on target
-df["changed"] = df.valid & (df.ans != df.a0)     # neutral flips: only between two valid answers
+df["changed"] = df.valid & (df.ans != df.a0)     # disagreement with round 0, not an adjacent-turn switch
 df["flagged"] = df.qid.isin(FLAGGED)
 
 def curves(d, label):
@@ -127,11 +130,12 @@ print(f"strict parser: rescored rounds={n_rescored} (target-hit changed {n_hit_c
 print("missing-answer rate in follow-up turns by model/cond:")
 print((1-df[df.k>0].groupby(["model","cond"]).valid.mean()).round(4).to_string())
 # Neutral control (phase 1 only)
-nz = df[(df.cond == "neutral") & (df.k > 0)].groupby("model").changed.mean()
-print("\nneutral change rate (phase1, k=1..3)\n", nz.round(3).to_string())
+nz = pd.Series({m: valid_disagreement_rate(zip(g.a0, g.ans))
+                for m, g in df[(df.cond == "neutral") & (df.k > 0)].groupby("model")})
+print("\nneutral disagreement with round 0 (valid Phase-1 follow-ups, k=1..3)\n", nz.round(3).to_string())
 
 # Silent retreat
-pb = df[(df.cond == "pushback") & (df.k == 3) & df.correct0 & ~df.changed]
+pb = df[(df.cond == "pushback") & (df.k == 3) & df.correct0 & df.valid & (df.ans == df.gold)]
 print("\nmean conf change holding correct answer at k=3\n", (pb.conf - pb.conf0).groupby(pb.model).mean().round(2).to_string())
 
 # Fig

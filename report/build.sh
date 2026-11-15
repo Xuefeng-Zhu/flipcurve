@@ -1,42 +1,38 @@
 #!/bin/bash
 # Rebuild figures, tables and the report PDF/DOCX. Run from flipcurve/.
-set -e
-python analyze_all.py > analysis_all.txt
-python analyze_extra.py > analysis_extra.txt
-python conf_match.py > analysis_conf.txt
-python report_stats.py > analysis_stats.txt
-python report_numbers.py > /dev/null
+set -euo pipefail
+cd "$(dirname "$0")/.."
+PYTHON_BIN="${PYTHON:-python3}"
+PANDOC_BIN="${PANDOC:-pandoc}"
+PDF_ENGINE_BIN="${PDF_ENGINE:-pdflatex}"
+# Sensitivity analyses can be run separately, but their populations must not be mixed
+# with the fixed protocol and sampling descriptions in the main report.
+if [[ "${PHASE2:-cohort}" != cohort || "${REPAIR:-1}" != 1 ]]; then
+    echo "The report build requires PHASE2=cohort and REPAIR=1. Run analysis scripts separately for sensitivity analyses." >&2
+    exit 1
+fi
+"$PYTHON_BIN" analyze_all.py > analysis_all.txt
+"$PYTHON_BIN" analyze_extra.py > analysis_extra.txt
+"$PYTHON_BIN" conf_match.py > analysis_conf.txt
+"$PYTHON_BIN" report_stats.py > analysis_stats.txt
+"$PYTHON_BIN" report_numbers.py > /dev/null
+"$PYTHON_BIN" - <<'PY'
+from pathlib import Path
+for name in ('analysis_all.txt', 'analysis_extra.txt', 'analysis_conf.txt', 'analysis_stats.txt'):
+    path = Path(name)
+    path.write_text('\n'.join(line.rstrip() for line in path.read_text().splitlines()) + '\n')
+PY
 cd report
-python -c "
+"$PYTHON_BIN" -c "
 import json, re
-s=open('report.md').read().replace('TABLE_MAIN',open('../tab_main.md').read()).replace('TABLE_CONF',open('../tab_conf.md').read()).replace('TABLE_PHASE',open('../tab_phase.md').read())
+s=open('report.md').read()
+for marker, filename in [('TABLE_MAIN', 'tab_main.md'), ('TABLE_BASELINE', 'tab_baseline.md'), ('TABLE_CONF', 'tab_conf.md'), ('TABLE_PHASE', 'tab_phase.md')]:
+    s=s.replace(marker,open('../'+filename).read())
 N=json.load(open('../report_numbers.json'))
 s=re.sub(r'\{\{(\w+)\}\}', lambda m: N[m.group(1)], s)
-assert '{{' not in s
+assert '{{' not in s and not re.search(r'TABLE_[A-Z]+', s)
 open('_build.md','w').write(s)"
-pandoc _build.md -o FlipCurve_report.pdf --pdf-engine=pdflatex --resource-path=.:..
-pandoc _build.md -o FlipCurve_report.docx --resource-path=.:..
-# Keep table rows together when Word paginates the report.
-python - <<'PY'
-from pathlib import Path
-from xml.dom import minidom
-from zipfile import ZipFile
-
-docx = Path('FlipCurve_report.docx')
-temp = docx.with_suffix('.tmp')
-with ZipFile(docx) as source, ZipFile(temp, 'w') as output:
-    for entry in source.infolist():
-        content = source.read(entry)
-        if entry.filename == 'word/document.xml':
-            xml = minidom.parseString(content)
-            for row in xml.getElementsByTagName('w:tr'):
-                props = next((child for child in row.childNodes if child.nodeName == 'w:trPr'), None)
-                if props is None:
-                    props = row.insertBefore(xml.createElement('w:trPr'), row.firstChild)
-                if not props.getElementsByTagName('w:cantSplit'):
-                    props.insertBefore(xml.createElement('w:cantSplit'), props.firstChild)
-            content = xml.toxml(encoding='utf-8')
-        output.writestr(entry, content)
-temp.replace(docx)
-PY
+"$PANDOC_BIN" _build.md -o FlipCurve_report.pdf --pdf-engine="$PDF_ENGINE_BIN" --resource-path=.:..
+"$PANDOC_BIN" _build.md -o FlipCurve_report.docx --resource-path=.:..
+"$PYTHON_BIN" format_docx.py FlipCurve_report.docx
 echo built
