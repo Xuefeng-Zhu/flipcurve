@@ -1,5 +1,5 @@
 ---
-title: "FlipCurve: Open-Weight LLMs Take Up Correct Suggestions Far More Often Than Incorrect Ones under Escalating Pushback"
+title: "FlipCurve: Asymmetric Uptake of Correct and Incorrect Suggestions under Escalating Pushback"
 author: "Frank Zhu — Independent researcher — with Apart Research"
 geometry: margin=0.9in
 fontsize: 10.5pt
