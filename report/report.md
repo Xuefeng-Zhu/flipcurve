@@ -1,6 +1,6 @@
 ---
 title: "FlipCurve: Do Open-Weight LLMs Update on Evidence or Cave to Pressure? Separating Warranted Updating from Capitulation under Escalating Pushback"
-author: "Tom (Xuefeng) Zhu — Independent researcher — with Apart Research"
+author: "Frank Zhu — Independent researcher — with Apart Research"
 geometry: margin=0.9in
 fontsize: 10.5pt
 colorlinks: true
