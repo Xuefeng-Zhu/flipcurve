@@ -18,7 +18,7 @@ Submission for the Apart Research AI x Epistemics Research Sprint (Nov 13-15, 20
 
 ## Usage
 ```
-pip install adaption datasets pandas matplotlib
+pip install adaption datasets pandas matplotlib numpy statsmodels
 export ADAPTION_API_KEY=...
 python flipcurve.py prep|args|run|analyze   # phase 1 (--mock for dry run)
 cd hard && python ../hard.py prep|screen|push  # phase 2

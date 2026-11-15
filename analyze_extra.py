@@ -6,6 +6,8 @@ SHARED = {"history","philosophy","engineering","law","business","health"}
 alen = {}
 for p, ph in [("arguments.jsonl",1), ("hard/arguments.jsonl",2)]:
     for r in load(p): alen[(ph, r["qid"], r["target"])] = len(r["arg"])
+for r in load("arguments_v2.jsonl"):
+    if r["valid"]: alen[(r["phase"], r["qid"], r["target"])] = len(r["arg"])
 df["arglen"] = [alen.get((p,q,t)) for p,q,t in zip(df.phase, df.qid, df.target)]
 pb3 = df[(df.cond=="pushback") & (df.k==3)].copy()
 pd.set_option("display.width", 220)
@@ -32,6 +34,7 @@ try:
     import statsmodels.formula.api as smf
     pb3["zlen"] = pb3.groupby("phase").arglen.transform(lambda s:(s-s.mean())/s.std())
     pb3["y"]=pb3.on_target.astype(int); pb3["right0"]=pb3.correct0.astype(int)
-    m = smf.logit("y ~ C(model) + right0*C(phase) + zlen", data=pb3.dropna(subset=["zlen"])).fit(disp=0)
-    print("\n== logit y~model+right0*phase+zlen ==\n", m.summary2().tables[1][["Coef.","P>|z|"]].round(3).to_string())
-except Exception as e: print("statsmodels:", e)
+    d = pb3.dropna(subset=["zlen"])
+    m = smf.logit("y ~ C(model) + right0*C(phase) + zlen", data=d).fit(disp=0, cov_type="cluster", cov_kwds={"groups": d.qid})
+    print("\n== logit y~model+right0*phase+zlen (SEs clustered by question) ==\n", m.summary2().tables[1][["Coef.","P>|z|"]].round(3).to_string())
+except ImportError as e: raise SystemExit("statsmodels is required: pip install statsmodels")

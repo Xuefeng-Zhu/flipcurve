@@ -57,8 +57,17 @@ def screen(a):
             if i % 100 == 0: print(i, flush=True)
 
 
+MANIFEST = "manifest.json"
+
+
 def selected(models):
-    """Per model: all wrong items + an equal-size random sample of correct ones (seeded)."""
+    """Per model: all wrong items + an equal-size random sample of correct ones (seeded).
+    Once manifest.json exists (written by `freeze` after screening stops) the cohort is read from it,
+    so resumed runs never re-sample from a changing screen population (reviewer P1)."""
+    if os.path.exists(MANIFEST):
+        man = json.load(open(MANIFEST))
+        scr = {m: {r["qid"]: r for r in fc.load(f"screen_{m}.jsonl")} for m in models}
+        return {m: [scr[m][q] for q in man[m]] for m in models if m in man}
     out = {}
     for m in models:
         sc, seen = [], set()
@@ -70,6 +79,15 @@ def selected(models):
         random.Random(sum(map(ord, m))).shuffle(right)
         out[m] = wrong + right[:len(wrong)]
     return out
+
+
+def freeze(a):
+    """Write the immutable Phase-2 cohort from the final screen files (only valid round-0 answers)."""
+    assert not os.path.exists(MANIFEST), "manifest already frozen"
+    sel = selected(a.models)
+    json.dump({m: [r["qid"] for r in rows] for m, rows in sel.items()}, open(MANIFEST, "w"), indent=0)
+    for m, rows in sel.items():
+        print(m, "wrong", sum(not r["correct0"] for r in rows), "right", sum(r["correct0"] for r in rows))
 
 
 def gen_args(a):
@@ -142,11 +160,11 @@ def push(a):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("cmd", choices=["prep", "screen", "args", "push"])
+    p.add_argument("cmd", choices=["prep", "screen", "args", "push", "freeze"])
     p.add_argument("--n", type=int, default=300)
     p.add_argument("--gen", default="gemma-4-26b-a4b-it")
     p.add_argument("--models", nargs="+", default=["gemma-4-31b-it", "qwen3.8-27b", "qwen3.5-397b",
                                                     "glm-5.3-flash", "glm-5.2", "deepseek-v4-flash"])
     p.add_argument("--workers", type=int, default=5)
     a = p.parse_args()
-    {"prep": prep, "screen": screen, "args": gen_args, "push": push}[a.cmd](a)
+    {"prep": prep, "screen": screen, "args": gen_args, "push": push, "freeze": freeze}[a.cmd](a)
