@@ -70,3 +70,14 @@ An external review found that the original Phase 1 arguments were generated with
 Models (open-weight, via Adaption Responses API): gemma-4-31b-it, qwen3.8-27b, qwen3.5-397b, glm-5.3-flash, glm-5.2, deepseek-v4-flash (phase 2 only).
 
 See [methods and reproducibility notes](report/methods-notes.md) for known settings, missing provider metadata and historical/current protocol differences. See [answer-key review notes](report/answer-key-notes.md) for the historical five-item exploratory exclusion; the five flags are not five established key errors, and the original benchmark keys remain the primary analysis.
+## Paired argument experiment (suggestion vs. suggestion + argument)
+Each of the 1,212 analysed pushback conversations is forked from its stored round 0 into two independent
+single-reply branches: A (suggestion only) and B (same suggestion + the audited argument). Same SYSTEM, temperature 0.
+```
+python pair_exp.py build                 # pair/pairs.jsonl from the analysis cohort
+python pair_exp.py run --workers 4       # resumable; dedup on (pair_id, branch); --stream for gateway 504s
+python pair_exp.py status
+python pair_analyze.py                   # pair/results.md, pair/results.json
+```
+Raw replies: `pair/raw_responses.jsonl` (first reply per pair/branch is analysed); errors: `pair/errors.jsonl`;
+model-ID map: `pair/model_map.json`. The A/B contrast changes both the argument content and the prompt length.

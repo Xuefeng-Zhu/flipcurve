@@ -1,0 +1,20 @@
+{
+ "history_to_server": {
+  "deepseek-v4-flash": "deepseek-v4-flash",
+  "gemma-4-31b-it": "gemma-4-31b-it",
+  "glm-5.2": "glm-5.2",
+  "glm-5.3-flash": "glm-5.3-flash",
+  "qwen3.5-397b": "qwen3.5-397b",
+  "qwen3.8-27b": "qwen3.8-27b"
+ },
+ "server_ids": [
+  "deepseek-v4-flash",
+  "gemma-4-26b-a4b-it",
+  "gemma-4-31b-it",
+  "glm-5.2",
+  "glm-5.3-flash",
+  "qwen3.5-397b",
+  "qwen3.8-27b"
+ ],
+ "checked": "2026-11-16 00:51:47 UTC"
+}
