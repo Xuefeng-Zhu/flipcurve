@@ -3,7 +3,7 @@ import sys
 from docx import Document
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
+from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
@@ -46,7 +46,12 @@ def format_document(path):
             style.font.name = FONT
             style.font.size = Pt(9.5)
     note = 'Research conducted at the AI x Epistemics Research Sprint, November 2026.'
-    if not any(note in p.text for p in doc.paragraphs):
+    footnote_text = ' '.join(
+        node.text or ''
+        for part in doc.part.package.parts if str(part.partname) == '/word/footnotes.xml'
+        for node in parse_xml(part.blob).iter(qn('w:t'))
+    )
+    if note not in footnote_text and not any(note in p.text for p in doc.paragraphs):
         for paragraph in doc.paragraphs:
             if paragraph.style.name == 'Author':
                 new = OxmlElement('w:p'); paragraph._p.addnext(new)
@@ -57,7 +62,9 @@ def format_document(path):
                 break
     figure_number = table_number = 0
     for paragraph in doc.paragraphs:
-        if paragraph.style.name == 'Captioned Figure':
+        if paragraph.text == 'Our main contributions are:':
+            paragraph.paragraph_format.keep_with_next = True
+        elif paragraph.style.name == 'Captioned Figure':
             paragraph.paragraph_format.keep_with_next = True
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         elif paragraph.style.name in ('Table Caption', 'Image Caption'):

@@ -16,6 +16,12 @@ N["neut_pool"] = f"{100*valid_disagreement_rate(zip(nz.a0, nz.ans)):.1f}"
 pb = df[(df.cond == "pushback") & (df.k > 0)]
 qs = np.linspace(0, 1, 10001)
 def team(g):
+    """Illustrative point estimates: exactly one initial answer is correct.
+
+    User correctness q and model correctness 1-q are complementary. The
+    observed correction/retention rates are assumed to transfer to these
+    disagreements; both-wrong cases and sampling uncertainty are excluded.
+    """
     R = g[g.correct0]; W = g[~g.correct0]
     fr = (R.ans == R.gold).mean(); fw = (W.ans == W.gold).mean()
     f = qs*fw + (1-qs)*fr; ok = qs[(f > qs) & (f > 1-qs)]
