@@ -4,7 +4,6 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 PYTHON_BIN="${PYTHON:-python3}"
 PANDOC_BIN="${PANDOC:-pandoc}"
-PDF_ENGINE_BIN="${PDF_ENGINE:-pdflatex}"
 # Sensitivity analyses can be run separately, but their populations must not be mixed
 # with the fixed protocol and sampling descriptions in the main report.
 if [[ "${PHASE2:-cohort}" != cohort || "${REPAIR:-1}" != 1 ]]; then
@@ -34,7 +33,7 @@ N=json.load(open('../report_numbers.json')); N.update(json.load(open('../user_nu
 s=re.sub(r'\{\{(\w+)\}\}', lambda m: N[m.group(1)], s)
 assert '{{' not in s and not re.search(r'TABLE_[A-Z]+', s)
 open('_build.md','w').write(s)"
-"$PANDOC_BIN" _build.md -o FlipCurve_report.pdf --pdf-engine="$PDF_ENGINE_BIN" --resource-path=.:..
 "$PANDOC_BIN" _build.md -o FlipCurve_report.docx --resource-path=.:..
 "$PYTHON_BIN" format_docx.py FlipCurve_report.docx
+"$PYTHON_BIN" export_pdf.py FlipCurve_report.docx
 echo built

@@ -18,21 +18,19 @@ All code in this repository was written during the sprint (Nov 13-15, 2026); the
 ## Phases
 
 - Phase 1 (`questions.jsonl`, `runs_<model>.jsonl`): 196 sampled items stratified across 14 categories; 193 had the gold and at least one decoy argument available. Three items were omitted for incomplete argument coverage, not benchmark invalidity. Historical generation attempted the gold answer plus three decoys using `deepseek-v4-flash`; the experiment selected the first available decoy from the completed cache. Pushback and neutral conversations had separate round-0 calls.
-- Phase 2 (`hard/`): 300 new items from six higher-error categories (history, philosophy, engineering, law, business, health) to enlarge the initially-wrong sample. A frozen manifest selects all initially wrong screens and an equal-size seeded sample of initially correct screens per model. Original L3 arguments are recorded as `gen: hark`; the underlying model/version, historical prompt and settings were not saved, so its independence from the evaluated models cannot be verified.
+- Phase 2 (`hard/`): 300 new items from six higher-error categories (history, philosophy, engineering, law, business, health) to enlarge the initially-wrong sample. A frozen manifest selects all initially wrong screens and an equal-size seeded sample of initially correct screens per model. Original L3 arguments are recorded as `gen: hark`. The author confirms that Hark was based on Claude Opus 5.5, a base model distinct from the evaluated set. The records do not independently verify that attribution, and no immutable model revision, historical prompt or generation settings were saved, so the original execution cannot be independently reconstructed.
 - The released runner implements a revised future-run protocol: a seeded decoy is chosen before generation, only the gold and that decoy are generated, arguments are audited before use, and Phase 2 stages run sequentially. The Phase 2 generator now defaults to `gemma-4-26b-a4b-it`; it does not reconstruct the historical Hark process. Rebuilding the report uses the fixed released data and makes no model-provider calls.
 
 ## Usage
 
-To rebuild only the released report, install the pinned analysis dependencies in your chosen Python environment, plus Pandoc 3.9 and a TeX engine (`pdflatex`, or Tectonic):
+To rebuild only the released English report, install the pinned analysis dependencies in your chosen Python environment, plus Pandoc 3.9 and LibreOffice:
 
 ```bash
 pip install -r requirements-report.txt
 bash report/build.sh
-# With Tectonic instead of pdflatex:
-PDF_ENGINE=tectonic bash report/build.sh
 ```
 
-The build accepts `PYTHON`, `PANDOC` and `PDF_ENGINE` executable overrides and makes no model-provider calls. It regenerates the PDF, DOCX, figures, tables and substituted Markdown from the released observations.
+The build accepts `PYTHON`, `PANDOC` and `SOFFICE` executable overrides and makes no model-provider calls. It regenerates the figures, tables and substituted Markdown, formats the DOCX using the [official template](report/template/README.md), and exports that same document to PDF. Old Standard TT fonts are bundled under their OFL license; the PDF export checks font embedding and the eight-page main-text limit. When run with Codex's bundled Python, the exporter uses the matching bundled LibreOffice. The Chinese reading edition is maintained separately.
 
 The data-collection commands below call the provider and can append to data files. Use a separate copy for new experiments; the final two commands analyse the released records locally.
 

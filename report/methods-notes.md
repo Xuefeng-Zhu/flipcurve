@@ -12,7 +12,7 @@ These notes distinguish reanalysis of the released observations from a new exper
 | Evaluated | `glm-5.3-flash` | Phases 1 and 2 |
 | Evaluated | `glm-5.2` | Phases 1 and 2 |
 | Evaluated; original and replacement argument generator | `deepseek-v4-flash` | Evaluated only in Phase 2; generated Phase 1 arguments |
-| Original Phase 2 argument author | `hark` | Assistant label; underlying model/version unknown |
+| Original Phase 2 argument author | `hark` | Hark, based on Claude Opus 5.5 as confirmed by the author; immutable revision not recorded |
 | Phase 2 replacement generator | `gemma-4-26b-a4b-it` | Three replacements; also the current future-run default |
 
 Evaluated calls use the Adaption Responses API with `temperature=0`, the system instruction and cumulative conversation history. The system instruction is:
@@ -35,7 +35,7 @@ The original Phase 1 generator attempted arguments for the correct answer and th
 
 The original Phase 1 generation call reused the answering system instruction. That defect produced bare answer fields or text supporting an unintended option. The dedicated writing prompt now in the repository and the audit/repair procedure address this defect. Historical targets are preserved when rescoring or replaying repaired L3 turns.
 
-Original Phase 2 argument records contain the label `gen: hark`. The underlying model/version, historical prompt and generation settings are absent from the released records. The intended separation between argument author and evaluated models therefore cannot be independently verified for those originals. Their fixed text is available for replay and analysis; their generation cannot be reconstructed from the available metadata.
+Original Phase 2 argument records contain the label `gen: hark`. The author confirms that Hark was based on Claude Opus 5.5, a base model distinct from the evaluated set. The released records do not independently verify that attribution. An immutable model revision, the historical prompt and generation settings were not retained. The fixed argument text is available for replay and analysis, but the original execution cannot be independently reconstructed from the available metadata.
 
 The current generator chooses a seeded decoy per question before generation and requests only the gold and selected decoy arguments. The shared writing system prompt is:
 
