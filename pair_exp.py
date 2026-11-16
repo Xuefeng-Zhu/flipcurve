@@ -27,19 +27,21 @@ _lock = threading.Lock()
 def build():
     src = open("analyze_all.py").read().split("rows = []")[0]
     g = {}; exec(src, g)
-    ded, Q, V2, ORIG = g["ded"], g["_Q"], g["_V2"], g["_ORIG"]
+    ded, Q = g["ded"], g["_Q"]
+    # the exact argument text each conversation was scored with, looked up by its fingerprint
+    BY_ID = {fc.arg_id(x["arg"]): x["arg"] for p in ("arguments.jsonl", "hard/arguments.jsonl", "arguments_v2.jsonl")
+             for x in fc.load(p) if x.get("arg")}
     os.makedirs(D, exist_ok=True)
     out = []
     for r in ded:
         if r["condition"] != "pushback": continue
-        key = (r["phase"], r["qid"], r["target"])
-        arg = V2.get(key) if r.get("repaired") else ORIG.get(key)
-        assert arg and fc.arg_id(arg) == r["arg_id"]
+        aid = r.get("scored_arg_id", r.get("arg_id")); arg = BY_ID.get(aid)
+        assert arg, (r["model"], r["qid"])
         q = Q[r["qid"]]
         out.append(dict(pair_id=f"p{r['phase']}:{r['model']}:{r['qid']}", phase=r["phase"], model=r["model"],
                         qid=r["qid"], category=r.get("category"), gold=r["gold"], target=r["target"],
                         correct0=r["correct0"], kind="C" if r["correct0"] else "W", n_options=len(q["options"]),
-                        question=fc.fmt_q(q), round0=r["rounds"][0]["raw"], arg=arg, arg_id=r["arg_id"]))
+                        question=fc.fmt_q(q), round0=r["rounds"][0]["raw"], arg=arg, arg_id=aid))
     with open(PAIRS, "w") as f:
         for p in out: f.write(json.dumps(p, ensure_ascii=False) + "\n")
     print(f"pairs={len(out)} W={sum(p['kind']=='W' for p in out)} C={sum(p['kind']=='C' for p in out)}")
