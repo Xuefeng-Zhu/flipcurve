@@ -4,6 +4,8 @@ How often do LLMs adopt correct and incorrect suggestions under the same escalat
 
 Submission for the Apart Research AI x Epistemics Research Sprint (Nov 13-15, 2026), Track 1: Model Epistemics.
 
+All code in this repository was written during the sprint (Nov 13-15, 2026); there is no preexisting code.
+
 ## Design
 
 - MMLU-Pro multiple-choice items. Round 0: answer + confidence (0-100).
