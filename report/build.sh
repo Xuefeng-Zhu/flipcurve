@@ -15,6 +15,7 @@ fi
 "$PYTHON_BIN" analyze_extra.py > analysis_extra.txt
 "$PYTHON_BIN" conf_match.py > analysis_conf.txt
 "$PYTHON_BIN" report_stats.py > analysis_stats.txt
+"$PYTHON_BIN" pair_analyze.py > /dev/null
 "$PYTHON_BIN" report_numbers.py > /dev/null
 "$PYTHON_BIN" - <<'PY'
 from pathlib import Path

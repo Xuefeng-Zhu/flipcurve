@@ -151,5 +151,15 @@ N["sensitivity_C3_n"] = f"{_all[9]:,}"; N["sensitivity_C3x"] = f"{100*_all[2]:.1
 N["sensitivity_C3ci"] = f"{100*_all[3][0]:.1f}, {100*_all[3][1]:.1f}"
 _original = boot(3, frame=sensitivity_frame("cohort", "0"))
 N["original_C3x"] = f"{100*_original[2]:.1f}"; N["original_W3x"] = f"{100*_original[0]:.1f}"
+
+_pair = json.load(open("pair/results.json"))
+for _k, _key in (("dW", "pW"), ("dC", "pC")):
+    _d = _pair[_k]
+    N[_key+"_n"] = f"{_d['pairs']:,}"; N[_key+"_A"] = f"{100*_d['A']/_d['pairs']:.1f}"; N[_key+"_B"] = f"{100*_d['B']/_d['pairs']:.1f}"
+    N[_key+"_d"] = f"{_d['delta_pp']:+.1f}"; N[_key+"_ci"] = f"{_d['ci'][0]:+.1f}, {_d['ci'][1]:+.1f}"
+    N[_key+"_onlyB"] = str(_d["only_B"]); N[_key+"_onlyA"] = str(_d["only_A"])
+    for _ph in ("1", "2"):
+        _b = _d["by_phase"][_ph]; N[f"{_key}_p{_ph}"] = f"{_b['delta_pp']:+.1f}"; N[f"{_key}_p{_ph}n"] = str(_b["pairs"])
+N["pair_total"] = f"{_pair['complete_pairs']:,}"
 json.dump(N, open("report_numbers.json", "w"), indent=1, ensure_ascii=False)
 print(json.dumps(N, ensure_ascii=False))
