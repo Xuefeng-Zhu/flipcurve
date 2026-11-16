@@ -7,7 +7,7 @@ colorlinks: true
 header-includes:
   - \usepackage{booktabs}
   - \usepackage{float}
-  - \floatplacement{figure}{htbp}
+  - \floatplacement{figure}{tbp}
   - \usepackage{newunicodechar}
   - \newunicodechar{−}{\ensuremath{-}}
   - \newunicodechar{Δ}{\ensuremath{\Delta}}
